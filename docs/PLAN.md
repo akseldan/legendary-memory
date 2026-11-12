@@ -25,13 +25,13 @@ Requirements, from the owner:
 | Phase | What | Status |
 |---|---|---|
 | 1 | Hub: storage, tools, sign-in, importer API | **Done. Passes locally: 40 end-to-end checks and 31 unit tests.** |
-| 2 | Deploy, connect Claude, test on Mac and iPhone | **Deployed 2026-11-12. Save and recall work from Claude on the Mac. iPhone and lockout checks still open.** |
+| 2 | Deploy, connect Claude, test on Mac and iPhone | **Done 2026-11-12. Save and recall work from Claude on Mac and iPhone. Production lockout check and custom instruction still open.** |
 | 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started |
-| 4 | Import existing history from both apps' exports | Not started |
+| 4 | Import existing history from both apps' exports | **Importer written and tested on made-up exports. Not yet run on your real exports.** |
 | 5 | Browser extension for automatic capture on the Mac | Not started |
 | 6 | Dashboard, Obsidian mirror, smarter search | Not started |
 
-**Next action: finish phase 2 (iPhone check, production lockout check, custom instruction), then phase 3.** Phase 1 was run on
+**Next action (needs Daniel at the keyboard): Phase 3, connect ChatGPT. Phase 4's importer is ready to try on real exports.** Phase 1 was run on
 2026-11-12 against `wrangler dev` (local D1 and KV): `npm run typecheck`, `npm test`
 (31 unit tests) and `npm run e2e` (40 checks) all pass. Findings:
 
@@ -184,11 +184,18 @@ mode and the app must be selected in each new chat, and saves ask for confirmati
 conversation. If Plus cannot run the tools, ChatGPT falls back to the extension (phase 5)
 for capture and a paste button for recall.
 
-**Phase 4: import.** A script in `importer/` reads the official export ZIPs and posts each
-chat to `/api/ingest/conversation`. ChatGPT's export does not say which project a chat
-belonged to, and Claude's reportedly omits Projects, so the script produces a proposed
-sorting for the owner to approve. Each app's built-in memory is moved by asking that app to
-list what it remembers and saving it with `remember`.
+**Phase 4: import.** `importer/` (no dependencies) reads the official export ZIPs, folders
+or `conversations.json` files and posts each chat to `/api/ingest/conversation`. ChatGPT's
+tree is walked from `current_node` so abandoned branches are dropped; hidden, empty and
+tool messages are skipped; long chats are split into several requests. Dry run by default;
+`--apply` needs `BRIDGE_API_KEY` in the environment and the same secret on the hub. Tested
+with 11 unit tests and a local import of made-up exports (zip and folder, a 3,100-message chat,
+a rerun with no duplicates, wrong and missing key). Not tested on real exports, whose formats
+were checked only against public descriptions; expect small surprises on the first real run
+and use `--limit 5` first. Still to do: a proposed sorting of chats into projects for you to
+approve (neither export says which project a chat belonged to, and Claude's reportedly omits
+Projects), and moving each app's built-in memory in by asking it to list what it remembers
+and saving that with `remember`.
 
 **Phase 5: browser extension.** A WebExtension (works in Zen/Firefox and Chrome) that reads
 the open chat on chatgpt.com, claude.ai and gemini.google.com from the page and posts it to

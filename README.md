@@ -58,6 +58,31 @@ without it the app cannot find the server and sign-in fails.
   from the + button on chatgpt.com/plugins. In each chat, pick Developer mode from the +
   menu and select the app.
 
+## Import your old chats
+
+Ask each app for its data export (ChatGPT: Settings → Data controls → Export data; Claude:
+Settings → Privacy → Export data). You get an emailed link to a ZIP. Then, from this folder:
+
+```sh
+# 1. Look first. This only reads the files and prints counts; nothing is sent.
+node importer/import.mjs ~/Downloads/chatgpt-export.zip ~/Downloads/claude-export.zip
+
+# 2. One-time: give the hub a key for the importer (32+ characters, keep it in your
+#    password manager, never paste it into a chat).
+cd hub && npx wrangler secret put BRIDGE_API_KEY && cd ..
+
+# 3. Try a small batch, then everything. Same key in your terminal for this session only.
+export BRIDGE_API_KEY='<the same key>'
+node importer/import.mjs ~/Downloads/chatgpt-export.zip --apply --limit 5 --url https://<your-url>
+node importer/import.mjs ~/Downloads/chatgpt-export.zip ~/Downloads/claude-export.zip --apply --url https://<your-url>
+```
+
+Safe to rerun: the same chat is updated, not duplicated. If it stops, rerun with
+`--start <n>` as it suggests. Imported chats are searchable straight away but arrive
+unfiled, because neither export says which project a chat belonged to. Known secret formats
+(API keys, tokens, card numbers) are removed before anything is stored, but ordinary
+personal details in your chats are stored as written, in your own Cloudflare account.
+
 ## Security
 
 - Only someone with your passphrase can connect an app. Five wrong tries pauses sign-in for
