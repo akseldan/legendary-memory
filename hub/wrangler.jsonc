@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "legendary-memory",
-  "main": "src/index.ts",
+  "main": "src/cloudflare/index.ts",
   "compatibility_date": "2026-10-01",
   // Needed so the sign-in library can safely fetch an AI app's public metadata document.
   "compatibility_flags": ["global_fetch_strictly_public"],

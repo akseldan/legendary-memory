@@ -1,7 +1,8 @@
 /**
  * All database access. Every write that carries text runs it through redact() first and
- * keeps the search index in step inside the same transaction (D1 batch).
+ * keeps the search index in step inside the same transaction (one batch).
  */
+import type { Db, Statement } from './db';
 import { redact } from './redact';
 import { editDistance, ftsQuery, keyWords, nowIso, slugify } from './text';
 
@@ -70,7 +71,7 @@ const BRIEF_VERSIONS_KEPT = 10;
 
 // ---------------------------------------------------------------- search index
 
-function unindex(db: D1Database, kind: string, refId: string): D1PreparedStatement[] {
+function unindex(db: Db, kind: string, refId: string): Statement[] {
   return [
     db
       .prepare('DELETE FROM search_fts WHERE rowid IN (SELECT id FROM search_map WHERE kind = ?1 AND ref_id = ?2)')
@@ -80,14 +81,14 @@ function unindex(db: D1Database, kind: string, refId: string): D1PreparedStateme
 }
 
 function reindex(
-  db: D1Database,
+  db: Db,
   kind: string,
   refId: string,
   projectId: string | null,
   title: string,
   body: string,
   createdAt: string,
-): D1PreparedStatement[] {
+): Statement[] {
   return [
     ...unindex(db, kind, refId),
     db
@@ -102,7 +103,7 @@ function reindex(
 }
 
 export async function search(
-  db: D1Database,
+  db: Db,
   query: string,
   options: { projectId?: string; limit?: number; kinds?: SearchHit['kind'][] } = {},
 ): Promise<SearchHit[]> {
@@ -140,12 +141,12 @@ export async function search(
 
 // -------------------------------------------------------------------- projects
 
-export async function listProjects(db: D1Database): Promise<Project[]> {
+export async function listProjects(db: Db): Promise<Project[]> {
   const { results } = await db.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all<Project>();
   return results;
 }
 
-export async function getProject(db: D1Database, id: string): Promise<Project | null> {
+export async function getProject(db: Db, id: string): Promise<Project | null> {
   return db.prepare('SELECT * FROM projects WHERE id = ?1').bind(id).first<Project>();
 }
 
@@ -183,7 +184,7 @@ function scoreProject(project: Project, ref: string): number {
 }
 
 /** Find the project a loose human reference ("the cooling project") points at. */
-export async function resolveProject(db: D1Database, ref: string): Promise<Resolution> {
+export async function resolveProject(db: Db, ref: string): Promise<Resolution> {
   const scored = (await listProjects(db))
     .map((project) => ({ project, score: scoreProject(project, ref) }))
     .filter((entry) => entry.score >= 50)
@@ -198,7 +199,7 @@ export async function resolveProject(db: D1Database, ref: string): Promise<Resol
   return { fuzzy: false, candidates: scored.slice(0, 5).map((e) => e.project) };
 }
 
-export async function createProject(db: D1Database, name: string): Promise<Project> {
+export async function createProject(db: Db, name: string): Promise<Project> {
   const cleanName = redact(name.trim()).text;
   const base = slugify(cleanName);
   let slug = base;
@@ -234,8 +235,8 @@ export interface ProjectUpdate {
 }
 
 /** Statements that apply an update to a project; the caller batches them with its own writes. */
-function projectUpdateStatements(db: D1Database, project: Project, update: ProjectUpdate, now: string) {
-  const statements: D1PreparedStatement[] = [];
+function projectUpdateStatements(db: Db, project: Project, update: ProjectUpdate, now: string) {
+  const statements: Statement[] = [];
   let redactions = 0;
   const next = { ...project };
   if (update.brief !== undefined) {
@@ -271,7 +272,7 @@ function projectUpdateStatements(db: D1Database, project: Project, update: Proje
   return { statements, redactions, project: next };
 }
 
-export async function updateProject(db: D1Database, project: Project, update: ProjectUpdate) {
+export async function updateProject(db: Db, project: Project, update: ProjectUpdate) {
   const result = projectUpdateStatements(db, project, update, nowIso());
   await db.batch(result.statements);
   return result;
@@ -288,7 +289,7 @@ export interface CheckpointInput {
 }
 
 export async function saveCheckpoint(
-  db: D1Database,
+  db: Db,
   project: Project,
   input: CheckpointInput,
   update: ProjectUpdate = {},
@@ -342,20 +343,20 @@ export async function saveCheckpoint(
   };
 }
 
-export async function recentCheckpoints(db: D1Database, projectId: string | null, limit: number) {
+export async function recentCheckpoints(db: Db, projectId: string | null, limit: number) {
   const statement = projectId
     ? db.prepare('SELECT * FROM checkpoints WHERE project_id = ?1 ORDER BY created_at DESC LIMIT ?2').bind(projectId, limit)
     : db.prepare('SELECT * FROM checkpoints ORDER BY created_at DESC LIMIT ?1').bind(limit);
   return (await statement.all<Checkpoint>()).results;
 }
 
-export const getCheckpoint = (db: D1Database, id: string) =>
+export const getCheckpoint = (db: Db, id: string) =>
   db.prepare('SELECT * FROM checkpoints WHERE id = ?1').bind(id).first<Checkpoint>();
 
 // ------------------------------------------------------------------- artifacts
 
 export async function saveArtifact(
-  db: D1Database,
+  db: Db,
   project: Project,
   input: { name: string; content: string; kind: string; source: string },
 ): Promise<{ artifact: ArtifactMeta; redactions: number }> {
@@ -396,7 +397,7 @@ export async function saveArtifact(
   };
 }
 
-export async function listArtifacts(db: D1Database, projectId: string): Promise<ArtifactMeta[]> {
+export async function listArtifacts(db: Db, projectId: string): Promise<ArtifactMeta[]> {
   const { results } = await db
     .prepare(
       'SELECT id, project_id, name, kind, version, source, length(content) AS size, updated_at FROM artifacts WHERE project_id = ?1 ORDER BY updated_at DESC',
@@ -406,7 +407,7 @@ export async function listArtifacts(db: D1Database, projectId: string): Promise<
   return results;
 }
 
-export const getArtifact = (db: D1Database, id: string) =>
+export const getArtifact = (db: Db, id: string) =>
   db
     .prepare('SELECT *, length(content) AS size FROM artifacts WHERE id = ?1')
     .bind(id)
@@ -414,12 +415,12 @@ export const getArtifact = (db: D1Database, id: string) =>
 
 // --------------------------------------------------------------------- profile
 
-export async function getProfile(db: D1Database): Promise<{ key: string; value: string; updated_at: string }[]> {
+export async function getProfile(db: Db): Promise<{ key: string; value: string; updated_at: string }[]> {
   return (await db.prepare('SELECT key, value, updated_at FROM profile ORDER BY key').all<{ key: string; value: string; updated_at: string }>())
     .results;
 }
 
-export async function setProfile(db: D1Database, key: string, value: string): Promise<{ key: string; redactions: number }> {
+export async function setProfile(db: Db, key: string, value: string): Promise<{ key: string; redactions: number }> {
   const now = nowIso();
   const cleanKey = slugify(key).slice(0, 60);
   const clean = redact(value.trim());
@@ -458,7 +459,7 @@ export interface IngestInput {
  * however long the chat is.
  */
 export async function ingestConversation(
-  db: D1Database,
+  db: Db,
   input: IngestInput,
 ): Promise<{ id: string; created: boolean; messages: number; redactions: number }> {
   const now = nowIso();
@@ -481,7 +482,7 @@ export async function ingestConversation(
   const low = seqs.length ? Math.min(...seqs) : 0;
   const high = seqs.length ? Math.max(...seqs) : -1;
 
-  const statements: D1PreparedStatement[] = [
+  const statements: Statement[] = [
     db
       .prepare(
         `INSERT INTO conversations (id, source, external_id, project_id, title, url, started_at, updated_at, message_count)
@@ -538,10 +539,10 @@ export async function ingestConversation(
   return { id, created: !existing, messages: rows.length, redactions };
 }
 
-export const getConversation = (db: D1Database, id: string) =>
+export const getConversation = (db: Db, id: string) =>
   db.prepare('SELECT * FROM conversations WHERE id = ?1').bind(id).first<Conversation>();
 
-export async function listConversations(db: D1Database, projectId: string, limit: number): Promise<Conversation[]> {
+export async function listConversations(db: Db, projectId: string, limit: number): Promise<Conversation[]> {
   return (
     await db
       .prepare('SELECT * FROM conversations WHERE project_id = ?1 ORDER BY updated_at DESC LIMIT ?2')
@@ -550,7 +551,7 @@ export async function listConversations(db: D1Database, projectId: string, limit
   ).results;
 }
 
-export async function getMessages(db: D1Database, conversationId: string, fromSeq: number, limit: number) {
+export async function getMessages(db: Db, conversationId: string, fromSeq: number, limit: number) {
   return (
     await db
       .prepare('SELECT seq, role, text FROM messages WHERE conversation_id = ?1 AND seq >= ?2 ORDER BY seq LIMIT ?3')
@@ -564,7 +565,7 @@ export async function getMessages(db: D1Database, conversationId: string, fromSe
 export type ForgetKind = 'project' | 'checkpoint' | 'artifact' | 'profile' | 'conversation';
 
 /** Permanently delete one stored item and everything indexed for it. Returns false if it did not exist. */
-export async function forget(db: D1Database, kind: ForgetKind, id: string): Promise<boolean> {
+export async function forget(db: Db, kind: ForgetKind, id: string): Promise<boolean> {
   switch (kind) {
     case 'project': {
       if (!(await getProject(db, id))) return false;
@@ -610,7 +611,7 @@ export const EXPORT_TABLES = [
 ] as const;
 
 /** One page of a table, for taking your data out. `after` is the last rowid already seen. */
-export async function exportPage(db: D1Database, table: (typeof EXPORT_TABLES)[number], after: number, limit: number) {
+export async function exportPage(db: Db, table: (typeof EXPORT_TABLES)[number], after: number, limit: number) {
   const { results } = await db
     .prepare(`SELECT rowid AS _rowid, * FROM ${table} WHERE rowid > ?1 ORDER BY rowid LIMIT ?2`)
     .bind(after, limit)

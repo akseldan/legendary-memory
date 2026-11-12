@@ -6,7 +6,7 @@
  */
 import { AuthorizationError, CimdFetchError, type ConsentDescription } from '@cloudflare/workers-oauth-provider';
 import { type ConnectionProps, type Env, SCOPE_READ, SCOPE_WRITE } from './env';
-import { escapeHtml } from './text';
+import { escapeHtml } from '../core/text';
 
 const OWNER_ID = 'owner';
 const MIN_PASSPHRASE_LENGTH = 12;

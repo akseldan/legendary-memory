@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { redact } from '../src/redact';
+import { redact } from '../src/core/redact';
 
 describe('redact: removes secrets', () => {
   const secrets: [string, string][] = [

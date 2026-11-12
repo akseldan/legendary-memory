@@ -1,8 +1,8 @@
 {
   "name": "legendary-memory-hub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "The memory hub: a small Cloudflare Worker that ChatGPT, Claude and other MCP clients share.",
+  "description": "The memory hub: shared memory for ChatGPT, Claude and other MCP clients. Runs locally with no account, or on Cloudflare.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -10,9 +10,12 @@
     "deploy": "wrangler deploy",
     "migrate": "wrangler d1 migrations apply DB --remote",
     "migrate:local": "wrangler d1 migrations apply DB --local",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.local.json",
     "test": "vitest run",
-    "e2e": "node test/e2e.mjs"
+    "e2e": "node test/e2e.mjs",
+    "build:local": "esbuild src/local/cli.ts --bundle --platform=node --target=node22 --format=esm --loader:.sql=text --external:node:sqlite --outfile=dist/legendary-memory.mjs",
+    "local": "npm run build:local && node dist/legendary-memory.mjs serve",
+    "test:local": "npm run build:local && node test/local.mjs"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.6",
@@ -22,8 +25,16 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261112.1",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0",
     "wrangler": "^4.161.0"
+  },
+  "bin": {
+    "legendary-memory": "dist/legendary-memory.mjs"
+  },
+  "engines": {
+    "node": ">=22.5"
   }
 }
