@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Local Cloudflare state (holds a local copy of your database)
+.wrangler/
+
+# Secrets. Never commit these.
+.dev.vars
+.env
+.env.*
+!.dev.vars.example
+
+# Your own data: chat exports and anything pulled out of the hub
+exports/
+*.export.json
+conversations*.json
+
+.DS_Store

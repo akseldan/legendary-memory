@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "legendary-memory",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // Needed so the sign-in library can safely fetch an AI app's public metadata document.
+  "compatibility_flags": ["global_fetch_strictly_public"],
+
+  // Wrangler creates both of these in your Cloudflare account on the first deploy.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "legendary-memory",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+
+  "vars": {
+    // Optional. Set to your deployed URL (no trailing slash) to pin it;
+    // left empty, the hub uses the address it is reached on.
+    "PUBLIC_URL": "",
+    // Hosts an AI app may send your sign-in back to. Anything else is refused at registration.
+    "ALLOWED_REDIRECT_HOSTS": "claude.ai,claude.com,chatgpt.com,localhost,127.0.0.1"
+  }
+
+  // Secrets (never commit these; set with `wrangler secret put NAME`):
+  //   OWNER_PASSPHRASE  what you type to approve an AI app's connection
+  //   BRIDGE_API_KEY    optional; enables /api/* for the importer and browser extension
+}

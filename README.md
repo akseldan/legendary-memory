@@ -1,2 +1,69 @@
 # legendary-memory
-Shared memory across mulitple ai's, works through the cloud. 
+
+One memory shared across your AI assistants. Start a project in ChatGPT, then tell Claude
+"recall the cooling project" and it picks up where you left off.
+
+It is a small server you host yourself, for free, on Cloudflare. Your AI apps connect to it
+as a tool. Your data stays in your own account.
+
+> **Status: step 1 is written but not yet tested.** The hub's code is complete and
+> type-checks. It has not been run. See [docs/PLAN.md](docs/PLAN.md) for the full plan and
+> the test checklist.
+
+## How it works
+
+- **The hub** (`hub/`) stores a living brief per project, session notes, saved files, facts
+  about you, and your chat history, with search over all of it.
+- **Claude and ChatGPT** connect to the hub as a connector and get seven tools: `recall`,
+  `search`, `read`, `save_checkpoint`, `save_artifact`, `remember`, `forget`.
+- **A browser extension and an importer** (not built yet) feed in full chat history.
+
+## What works where
+
+| | Claude | ChatGPT |
+|---|---|---|
+| Mac (web or desktop app) | Yes | Yes, in the browser, with Developer mode on |
+| iPhone and iPad apps | Yes, after adding the connector on the web | No. ChatGPT custom connectors are web only |
+
+## Layout
+
+```
+hub/          the memory server (Cloudflare Worker, TypeScript)
+  src/        index (routing), auth (sign-in page), mcp (the tools),
+              store (database), api (importer endpoints), redact (secret filter)
+  migrations/ database schema
+docs/PLAN.md  architecture, decisions, phases, test checklist
+```
+
+## Setup (after testing is done)
+
+You need a free Cloudflare account and Node.js 22 or newer.
+
+```sh
+cd hub
+npm install
+npx wrangler login
+npx wrangler deploy                       # creates the database and key store, prints your URL
+npx wrangler d1 migrations apply DB --remote
+npx wrangler secret put OWNER_PASSPHRASE  # 12+ characters; you type this to approve an app
+```
+
+Then add `https://<your-url>/mcp` as a custom connector:
+
+- **Claude:** Customize → Connectors → + → Add custom connector.
+- **ChatGPT:** Settings → Security and login → turn on Developer mode, then create an app
+  from the + button on chatgpt.com/plugins. In each chat, pick Developer mode from the +
+  menu and select the app.
+
+## Security
+
+- Only someone with your passphrase can connect an app. Five wrong tries pauses sign-in for
+  15 minutes.
+- Passwords, API keys, tokens and card numbers are stripped from text before it is saved.
+- What the hub returns is labelled as stored data so a saved note cannot pose as an
+  instruction to the AI.
+- This repo holds code only. Your memories live in your Cloudflare account, never here.
+
+## License
+
+MIT
