@@ -25,13 +25,13 @@ Requirements, from the owner:
 | Phase | What | Status |
 |---|---|---|
 | 1 | Hub: storage, tools, sign-in, importer API | **Done. Passes locally: 40 end-to-end checks and 31 unit tests.** |
-| 2 | Deploy, connect Claude, test on Mac and iPhone | Not started |
+| 2 | Deploy, connect Claude, test on Mac and iPhone | **Deployed 2026-11-12. Save and recall work from Claude on the Mac. iPhone and lockout checks still open.** |
 | 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started |
 | 4 | Import existing history from both apps' exports | Not started |
 | 5 | Browser extension for automatic capture on the Mac | Not started |
 | 6 | Dashboard, Obsidian mirror, smarter search | Not started |
 
-**Next action: phase 2, deploy to Cloudflare and connect Claude.** Phase 1 was run on
+**Next action: finish phase 2 (iPhone check, production lockout check, custom instruction), then phase 3.** Phase 1 was run on
 2026-11-12 against `wrangler dev` (local D1 and KV): `npm run typecheck`, `npm test`
 (31 unit tests) and `npm run e2e` (40 checks) all pass. Findings:
 
@@ -160,6 +160,16 @@ Run from `hub/`. A `.dev.vars` file with local-only values is needed (copy
    update, not duplicate. Then `search` must find a word from a message.
 6. Add unit tests (vitest is installed) for `redact.ts` and the project matcher in
    `store.ts`. Check that ordinary code such as `token = getToken()` is not redacted.
+
+## Phase 2 notes (2026-11-12)
+
+- Connector address must end in `/mcp`. Entered without it, Claude's server check says
+  "Not found", the sign-in settings cannot be discovered, and the flow breaks.
+- A password manager's fill-and-submit arrow on the consent page may submit the form twice;
+  the second submit fails with "This authorization was not started in this browser". Fill the
+  field, then click Allow once. (Likely cause, not confirmed.)
+- Left to itself, Claude may answer "recall the X project" by searching past chats instead of
+  calling the hub. Naming the tool, or the custom instruction in the README, fixes it.
 
 ## Later phases
 

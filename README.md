@@ -6,9 +6,9 @@ One memory shared across your AI assistants. Start a project in ChatGPT, then te
 It is a small server you host yourself, for free, on Cloudflare. Your AI apps connect to it
 as a tool. Your data stays in your own account.
 
-> **Status: step 1 is written but not yet tested.** The hub's code is complete and
-> type-checks. It has not been run. See [docs/PLAN.md](docs/PLAN.md) for the full plan and
-> the test checklist.
+> **Status: deployed and connected to Claude.** Phase 1 (local tests) and phase 2 (deploy,
+> save and recall from Claude on the web) pass. ChatGPT is not connected yet. See
+> [docs/PLAN.md](docs/PLAN.md) for the plan and what is done.
 
 ## How it works
 
@@ -35,7 +35,7 @@ hub/          the memory server (Cloudflare Worker, TypeScript)
 docs/PLAN.md  architecture, decisions, phases, test checklist
 ```
 
-## Setup (after testing is done)
+## Setup
 
 You need a free Cloudflare account and Node.js 22 or newer.
 
@@ -48,9 +48,12 @@ npx wrangler d1 migrations apply DB --remote
 npx wrangler secret put OWNER_PASSPHRASE  # 12+ characters; you type this to approve an app
 ```
 
-Then add `https://<your-url>/mcp` as a custom connector:
+Then add `https://<your-url>/mcp` as a custom connector. The address must end in `/mcp`;
+without it the app cannot find the server and sign-in fails.
 
-- **Claude:** Customize → Connectors → + → Add custom connector.
+- **Claude:** Customize → Connectors → + → Add custom connector. Then add to Claude's custom
+  instructions: "Use Legendary Memory: recall a project before working on it and save a
+  checkpoint when we finish a session." Without it Claude may search past chats instead.
 - **ChatGPT:** Settings → Security and login → turn on Developer mode, then create an app
   from the + button on chatgpt.com/plugins. In each chat, pick Developer mode from the +
   menu and select the app.
