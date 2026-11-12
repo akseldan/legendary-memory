@@ -24,16 +24,25 @@ Requirements, from the owner:
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Hub: storage, tools, sign-in, importer API | **Code written and type-checked. Never run.** |
+| 1 | Hub: storage, tools, sign-in, importer API | **Done. Passes locally: 40 end-to-end checks and 31 unit tests.** |
 | 2 | Deploy, connect Claude, test on Mac and iPhone | Not started |
 | 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started |
 | 4 | Import existing history from both apps' exports | Not started |
 | 5 | Browser extension for automatic capture on the Mac | Not started |
 | 6 | Dashboard, Obsidian mirror, smarter search | Not started |
 
-**Next action: run the phase 1 test checklist below.** Nothing has been executed yet beyond
-`tsc --noEmit` (passes) and applying the migration to a local database (15 statements
-succeeded, so the schema and the full-text table are valid).
+**Next action: phase 2, deploy to Cloudflare and connect Claude.** Phase 1 was run on
+2026-11-12 against `wrangler dev` (local D1 and KV): `npm run typecheck`, `npm test`
+(31 unit tests) and `npm run e2e` (40 checks) all pass. Findings:
+
+- The compatibility date `2026-10-01` was accepted.
+- The MCP SDK loads and serves in the Workers runtime with `CfWorkerJsonSchemaValidator`;
+  no `nodejs_compat` flag and no hand-written handler were needed.
+- Local KV and D1 work without ids in `wrangler.jsonc`.
+- Not covered locally: the sign-in limit is keyed on the `CF-Connecting-IP` header. The test
+  could not show that per-address counting separates different visitors, so re-check the
+  lockout after deploying. Real Claude and ChatGPT sign-in can only be tested after
+  deploying (phases 2 and 3).
 
 ## Architecture
 
@@ -123,7 +132,7 @@ match so nothing lands in the wrong project.
 - Known gap: someone who learns the hub's URL could spam the registration endpoint to use
   up the free KV write quota (a nuisance, not a data risk). Fix later with a rate limit.
 
-## Phase 1 test checklist (do this next)
+## Phase 1 test checklist (completed 2026-11-12)
 
 Run from `hub/`. A `.dev.vars` file with local-only values is needed (copy
 `.dev.vars.example`).
@@ -136,8 +145,8 @@ Run from `hub/`. A `.dev.vars` file with local-only values is needed (copy
      unverified. If it fails, add the `nodejs_compat` flag or replace the SDK with a small
      hand-written JSON-RPC handler;
    - local KV and D1 working without ids in `wrangler.jsonc`.
-3. Write `test/e2e.mjs` (the `npm run e2e` script points at it; it does not exist yet). It
-   should: register a client at `/oauth/register` with a `http://localhost` redirect; GET
+3. `test/e2e.mjs` (run with `npm run e2e` while `wrangler dev` is up; the lockout test runs
+   last and blocks sign-in for 15 minutes, so a rerun needs a fresh local state). It does: register a client at `/oauth/register` with a `http://localhost` redirect; GET
    `/authorize` with PKCE; POST the form with the passphrase; exchange the code at
    `/oauth/token`; then POST JSON-RPC to `/mcp`: `initialize`, `tools/list`, and
    `tools/call` for each tool.
