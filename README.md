@@ -50,6 +50,8 @@ hub/
   src/local/       local target: SQLite file, stdio + localhost HTTP, CLI
   src/cloudflare/  Cloudflare target: Worker, OAuth sign-in page, D1 and KV bindings
   migrations/      database schema (shared by both targets)
+importer/          loads ChatGPT and Claude data exports into the hub
+mirror/            copies your memory into an Obsidian vault as Markdown
 docs/PLAN.md       architecture, decisions, phases, test checklist
 ```
 
@@ -119,6 +121,28 @@ Safe to rerun: the same chat is updated, not duplicated. If it stops, rerun with
 unfiled, because neither export says which project a chat belonged to. Known secret formats
 (API keys, tokens, card numbers) are removed before anything is stored, but ordinary
 personal details in your chats are stored as written, in your own Cloudflare account.
+
+**Local hub instead of Cloudflare:** run `npm run local` in `hub/`, use the key that
+`node hub/dist/legendary-memory.mjs info` prints as `BRIDGE_API_KEY`, and pass
+`--url http://127.0.0.1:8787`. Plain `http://` is only accepted for this computer.
+
+## Mirror into Obsidian
+
+Copies your projects, session notes, saved files and facts about you into your vault as
+Markdown, so you can read and link them in Obsidian. One way only: the hub is the source,
+and the next run overwrites edits made in the vault.
+
+```sh
+export BRIDGE_API_KEY='<the same key as the importer>'
+node mirror/mirror.mjs ~/path/to/YourVault --url https://<your-url> --dry-run   # preview
+node mirror/mirror.mjs ~/path/to/YourVault --url https://<your-url>
+```
+
+It writes only inside `YourVault/Legendary Memory/` (change with `--folder`): one note per
+project, an `Artifacts/` folder per project, `Projects.md` and `About me.md`. Each note it
+writes starts with a `legendary-memory: mirror` line; it never replaces or deletes a note
+without that line, so your own notes are safe even inside that folder. Rerun whenever you
+like; unchanged notes are left alone, and notes for deleted projects or files are removed.
 
 ## Security
 

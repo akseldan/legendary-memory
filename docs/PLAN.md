@@ -30,9 +30,9 @@ Requirements, from the owner:
 | 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started |
 | 4 | Import existing history from both apps' exports | **Importer written and tested on made-up exports. Not yet run on your real exports.** |
 | 5 | Browser extension for automatic capture on the Mac | Not started |
-| 6 | Dashboard, Obsidian mirror, smarter search | Not started |
+| 6 | Dashboard, Obsidian mirror, smarter search | **Obsidian mirror done 2026-11-12 (6 unit tests, run against the local hub). Not yet run on your real vault. Dashboard and search not started.** |
 
-**Next action (needs Daniel at the keyboard): Phase 3, connect ChatGPT. Phase 4's importer is ready to try on real exports.** Phase 1 was run on
+**Next action (needs Daniel at the keyboard): Phase 3, connect ChatGPT. Phase 4's importer and phase 6's Obsidian mirror are ready to try on your real exports and vault.** Phase 1 was run on
 2026-11-12 against `wrangler dev` (local D1 and KV): `npm run typecheck`, `npm test`
 (31 unit tests) and `npm run e2e` (40 checks) all pass. Findings:
 
@@ -233,9 +233,30 @@ ChatGPT if needed. It reads only what the page shows; it does not call the apps'
 APIs. Page layouts change, so expect occasional fixes.
 
 **Phase 6: polish.** A small dashboard to view, edit and delete memories; a one-way mirror
-of briefs into the Obsidian vault as Markdown; vector search and artifact version history
+of briefs into the Obsidian vault as Markdown (done: `mirror/`, see below); vector search and artifact version history
 if needed. Optional: Gemini's free API as a swappable summarizer for bulk import. Its free
 tier may use requests to improve Google's products, so keep sensitive chats out of it.
+
+## Merge and mirror notes (2026-11-12)
+
+- `refactor/local-first-core` was merged with `main` (they had diverged: main had the
+  importer and phase 2 notes). Only the README and this plan conflicted. After the merge:
+  Cloudflare e2e 40/40, unit 31/31, local 26/26, importer 11/11.
+- The importer now accepts `http://` for localhost, 127.0.0.1 and [::1] only, so it can
+  feed the local hub. Tested: a fake export imported into the local hub, rerun without
+  duplicates, and `http://localhost.evil.com` rejected.
+- Imported chat messages are now indexed under the chat's own start date, not the import
+  time, so search shows when a chat really happened.
+- `mirror/` (no dependencies) pages through `/api/export` and writes Markdown into
+  `<vault>/Legendary Memory/`. It owns only files whose first frontmatter line is
+  `legendary-memory: mirror`; any other file at the same path is skipped, never replaced,
+  and nothing outside its folder is touched. Writes only changed files, so Obsidian and
+  iCloud sync see no churn. Tested: 6 unit tests, plus a local-hub run covering a dry run,
+  skipping a hand-written note, a no-change rerun, removal after `forget`, empty-folder
+  cleanup and a wrong key. Dates are UTC, so a late-evening save in Tacoma shows the next
+  day.
+- Not done: running it automatically. On the Mac a launchd job or Shortcuts automation could
+  run it hourly; left for when the manual run has been tried on the real vault.
 
 ## Limits to be upfront about
 
