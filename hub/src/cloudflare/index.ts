@@ -1,5 +1,6 @@
 /**
- * Legendary Memory hub: one Cloudflare Worker.
+ * Legendary Memory hub, Cloudflare target: one Worker with D1 (data) and KV (sign-in state).
+ * The memory logic itself lives in ../core and is shared with the local target.
  *
  *   /mcp         the tools AI apps call (needs a token from the sign-in below)
  *   /authorize   the sign-in page where you approve an app
@@ -7,10 +8,22 @@
  *   /api/*       importer and browser-extension API (needs BRIDGE_API_KEY)
  */
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
-import { handleApi } from './api';
+import { handleApi } from '../core/api';
+import type { Db } from '../core/db';
+import { handleMcpRequest } from '../core/mcp';
 import { handleAuthorize } from './auth';
-import { type Env, SCOPE_READ, SCOPE_WRITE, VERSION } from './env';
-import { mcpHandler } from './mcp';
+import { type ConnectionProps, type Env, SCOPE_READ, SCOPE_WRITE, VERSION } from './env';
+
+/** D1 already has the shape the core needs; this cast only bridges two type definitions. */
+const dbOf = (env: Env): Db => env.DB as unknown as Db;
+
+/** Handles POST /mcp for a request the OAuth layer has already authenticated. */
+const mcpHandler = {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const context = ctx as ExecutionContext & { props?: ConnectionProps; auth?: { scope?: string[] } };
+    return handleMcpRequest(request, dbOf(env), context.props ?? { client: '' }, context.auth?.scope ?? []);
+  },
+};
 
 const DAY = 24 * 60 * 60;
 
@@ -18,7 +31,7 @@ const defaultHandler = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname === '/authorize') return handleAuthorize(request, env);
-    if (pathname.startsWith('/api/')) return handleApi(request, env);
+    if (pathname.startsWith('/api/')) return handleApi(request, { db: dbOf(env), apiKey: env.BRIDGE_API_KEY });
     if (pathname === '/') {
       return new Response(`Legendary Memory hub v${VERSION}. Add this address plus /mcp as a connector in your AI app.\n`, {
         headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Robots-Tag': 'noindex' },

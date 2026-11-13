@@ -3,18 +3,34 @@
 One memory shared across your AI assistants. Start a project in ChatGPT, then tell Claude
 "recall the cooling project" and it picks up where you left off.
 
-It is a small server you host yourself, for free, on Cloudflare. Your AI apps connect to it
-as a tool. Your data stays in your own account.
+It is a small server you own. Run it on your own computer with no account at all, or host
+it for free on Cloudflare so your phone and web apps can reach it. Your data stays with you
+either way.
 
-> **Status: deployed and connected to Claude.** Phase 1 (local tests) and phase 2 (deploy,
-> save and recall from Claude on the web) pass. ChatGPT is not connected yet. See
-> [docs/PLAN.md](docs/PLAN.md) for the plan and what is done.
+> **Status:** deployed on Cloudflare and connected to Claude (web, Mac, iPhone); save and
+> recall work. The local target passes its tests but has not been tried with the real Claude
+> Desktop app yet. ChatGPT is not connected yet. See [docs/PLAN.md](docs/PLAN.md).
+
+## Pick how to run it
+
+| | Local (no account) | Cloudflare (free account) |
+|---|---|---|
+| Setup | `npm run local`, nothing else | `wrangler deploy` once |
+| Claude Desktop, Claude Code | Yes, over stdio | Yes |
+| claude.ai, Claude on iPhone/iPad | No | Yes |
+| ChatGPT (web) | No | Yes |
+| Works with the computer off | No | Yes |
+| Where the data lives | One SQLite file on your computer | Your Cloudflare account |
+
+Web apps like claude.ai and ChatGPT connect from the internet, so they can only reach a
+server with a public address. That is the only reason the Cloudflare target exists. Anyone
+can start local and add Cloudflare later; the memory logic is identical.
 
 ## How it works
 
 - **The hub** (`hub/`) stores a living brief per project, session notes, saved files, facts
   about you, and your chat history, with search over all of it.
-- **Claude and ChatGPT** connect to the hub as a connector and get seven tools: `recall`,
+- **Claude and ChatGPT** connect to the hub as a connector or local tool and get seven tools: `recall`,
   `search`, `read`, `save_checkpoint`, `save_artifact`, `remember`, `forget`.
 - **A browser extension and an importer** (not built yet) feed in full chat history.
 
@@ -28,14 +44,35 @@ as a tool. Your data stays in your own account.
 ## Layout
 
 ```
-hub/          the memory server (Cloudflare Worker, TypeScript)
-  src/        index (routing), auth (sign-in page), mcp (the tools),
-              store (database), api (importer endpoints), redact (secret filter)
-  migrations/ database schema
-docs/PLAN.md  architecture, decisions, phases, test checklist
+hub/
+  src/core/        the memory logic, runtime-agnostic: store (database), mcp (the tools),
+                   api (importer endpoints), redact (secret filter), db (the interface)
+  src/local/       local target: SQLite file, stdio + localhost HTTP, CLI
+  src/cloudflare/  Cloudflare target: Worker, OAuth sign-in page, D1 and KV bindings
+  migrations/      database schema (shared by both targets)
+docs/PLAN.md       architecture, decisions, phases, test checklist
 ```
 
-## Setup
+## Run it locally (no account)
+
+Needs Node.js 22.5 or newer.
+
+```sh
+cd hub
+npm install
+npm run build:local
+node dist/legendary-memory.mjs info     # prints your data folder and connector settings
+```
+
+- **Claude Desktop / Claude Code:** `info` prints the exact lines to paste (a stdio
+  command, no sign-in needed because nothing leaves your computer).
+- **Other local tools** (importer, browser extension): `npm run local` starts a server on
+  `127.0.0.1:8787`. It needs the key `info` prints, and refuses requests that are not
+  addressed to localhost.
+
+Your memory is `~/.legendary-memory/memory.db`. Back it up by copying that file.
+
+## Host it on Cloudflare (for phone and web apps)
 
 You need a free Cloudflare account and Node.js 22 or newer.
 
@@ -90,7 +127,8 @@ personal details in your chats are stored as written, in your own Cloudflare acc
 - Passwords, API keys, tokens and card numbers are stripped from text before it is saved.
 - What the hub returns is labelled as stored data so a saved note cannot pose as an
   instruction to the AI.
-- This repo holds code only. Your memories live in your Cloudflare account, never here.
+- This repo holds code only. Your memories live on your computer or in your Cloudflare account, never here.
+- The local HTTP server listens on 127.0.0.1 only, requires a random key, and rejects non-local Host headers.
 
 ## License
 

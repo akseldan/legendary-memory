@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveProject, type Project } from '../src/store';
+import type { Db } from "../src/core/db";
+import { resolveProject, type Project } from '../src/core/store';
 
 function project(name: string, aliases = ''): Project {
   return {
@@ -16,7 +17,7 @@ function project(name: string, aliases = ''): Project {
 
 /** A stand-in for D1 that returns a fixed project list. */
 const dbWith = (...projects: Project[]) =>
-  ({ prepare: () => ({ all: async () => ({ results: projects }) }) }) as unknown as D1Database;
+  ({ prepare: () => ({ all: async () => ({ results: projects }) }) }) as unknown as Db;
 
 describe('resolveProject', () => {
   const cooling = project('Cooling System');

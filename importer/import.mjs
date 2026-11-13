@@ -104,8 +104,19 @@ if (!flag('--apply')) {
 
 const hub = (option('--url') ?? process.env.HUB_URL ?? '').replace(/\/+$/, '');
 const key = process.env.BRIDGE_API_KEY ?? '';
-if (!hub.startsWith('https://') && !hub.startsWith('http://localhost')) {
-  console.error('\n--apply needs --url (or HUB_URL) set to your hub address, starting with https://');
+// Plain http is allowed only to this computer (the local target); anything else must be https.
+function hubAllowed(address) {
+  try {
+    const u = new URL(address);
+    if (u.protocol === 'https:') return true;
+    return u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+if (!hubAllowed(hub)) {
+  console.error('\n--apply needs --url (or HUB_URL) set to your hub address: https://... for Cloudflare,');
+  console.error('or http://127.0.0.1:8787 for the local hub.');
   process.exit(1);
 }
 if (key.length < 32) {

@@ -25,6 +25,7 @@ Requirements, from the owner:
 | Phase | What | Status |
 |---|---|---|
 | 1 | Hub: storage, tools, sign-in, importer API | **Done. Passes locally: 40 end-to-end checks and 31 unit tests.** |
+| 1b | Restructure: shared core, local (no-account) target, Cloudflare target | **Done 2026-11-12. Cloudflare still 40/40; local target 26 checks.** |
 | 2 | Deploy, connect Claude, test on Mac and iPhone | **Done 2026-11-12. Save and recall work from Claude on Mac and iPhone. Production lockout check and custom instruction still open.** |
 | 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started |
 | 4 | Import existing history from both apps' exports | **Importer written and tested on made-up exports. Not yet run on your real exports.** |
@@ -45,6 +46,34 @@ Requirements, from the owner:
   deploying (phases 2 and 3).
 
 ## Architecture
+
+### Two targets, one core (restructured 2026-11-12)
+
+The project is open source, so it cannot require every user to make a Cloudflare account.
+The memory logic therefore sits in `hub/src/core/` and talks to a tiny `Db` interface
+(`prepare/bind/first/all/run/batch`, which is the subset of D1 the store uses). Two thin
+targets plug into it:
+
+- **`src/local/`**: Node 22.5+, `node:sqlite` (built in, no native add-on), one file at
+  `~/.legendary-memory/memory.db`. Entry points: stdio MCP for Claude Desktop and Claude
+  Code (no auth, nothing leaves the machine) and an HTTP server bound to 127.0.0.1 with a
+  random key and a Host-header check, for the importer and extension. Built into one file
+  with esbuild (`npm run build:local`).
+- **`src/cloudflare/`**: the Worker, OAuth sign-in page, and D1/KV bindings. Required for
+  claude.ai, Claude mobile and ChatGPT web, which can only reach a public address.
+
+Both read the same `migrations/`. Adding another host later (Fly, Docker, a VPS) means
+writing one more target; the core does not change.
+
+What this cannot do: no zero-account option exists for web ChatGPT or claude.ai, because
+someone must host a public URL. A temporary `cloudflared tunnel --url` needs no account but
+the address changes every run, so it suits testing only.
+
+Behavioral notes: the core's search uses FTS5, present in both D1 and `node:sqlite`.
+`crypto.subtle.timingSafeEqual` (Workers only) was replaced with a portable comparison.
+The local stdio target learns the client's name from `initialize` to label saved sessions.
+
+Old single-target diagram, still accurate for the Cloudflare target:
 
 ```
  Claude (web, Mac, iPhone, iPad) ─┐
@@ -80,7 +109,7 @@ the browser extension (phase 5).
 ### Sign-in
 
 OAuth 2.1 through `@cloudflare/workers-oauth-provider` (Cloudflare's maintained library;
-auth is not hand-rolled). The one custom piece is the consent page in `src/auth.ts`: it
+auth is not hand-rolled). The one custom piece is the consent page in `src/cloudflare/auth.ts`: it
 shows which app is asking, where access will be sent, and takes the owner's passphrase.
 
 - Both Dynamic Client Registration and Client ID Metadata Documents are on, because Claude
@@ -103,7 +132,7 @@ shows which app is asking, where access will be sent, and takes the owner's pass
 | `conversations`, `messages` | full chat history from the importer and extension |
 | `search_map`, `search_fts` | derived search index, rebuildable from the tables above |
 
-### Tools (`hub/src/mcp.ts`)
+### Tools (`hub/src/core/mcp.ts`)
 
 | Tool | Does | Writes? |
 |---|---|---|
@@ -123,7 +152,7 @@ match so nothing lands in the wrong project.
 
 - Passphrase check is constant-time; 5 failures per address (40 overall) pause sign-in for
   15 minutes; the hub refuses to run with a passphrase under 12 characters.
-- `src/redact.ts` strips API keys, tokens, private keys, password assignments, card numbers
+- `src/core/redact.ts` strips API keys, tokens, private keys, password assignments, card numbers
   and SSNs from all text before storage.
 - Tool results are prefixed as stored data, and the server instructions say stored content
   is never instructions (guards against a saved note hijacking a later chat).

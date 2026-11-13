@@ -2,8 +2,8 @@
  * A small HTTP API for tools that are not AI apps: the history importer and the browser
  * extension. Off until a BRIDGE_API_KEY secret is set; every call needs that key.
  */
-import type { Env } from './env';
-import { VERSION } from './env';
+import { VERSION } from './constants';
+import type { Db } from './db';
 import * as store from './store';
 
 const MAX_BODY_BYTES = 1_500_000;
@@ -19,8 +19,21 @@ const json = (body: unknown, status = 200): Response =>
 
 const problem = (status: number, error: string): Response => json({ error }, status);
 
-async function authorized(request: Request, env: Env): Promise<boolean> {
-  const key = env.BRIDGE_API_KEY ?? '';
+/** What a target gives the API: the database and the key callers must present. */
+export interface ApiContext {
+  db: Db;
+  apiKey?: string;
+}
+
+function sameBytes(a: ArrayBuffer, b: ArrayBuffer): boolean {
+  const x = new Uint8Array(a);
+  const y = new Uint8Array(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < x.length; i++) diff |= x[i]! ^ (y[i] ?? 0);
+  return diff === 0;
+}
+
+async function authorized(request: Request, key: string): Promise<boolean> {
   const header = request.headers.get('Authorization') ?? '';
   const given = header.startsWith('Bearer ') ? header.slice(7) : '';
   const encoder = new TextEncoder();
@@ -28,7 +41,7 @@ async function authorized(request: Request, env: Env): Promise<boolean> {
     crypto.subtle.digest('SHA-256', encoder.encode(given)),
     crypto.subtle.digest('SHA-256', encoder.encode(key)),
   ]);
-  return crypto.subtle.timingSafeEqual(left, right) && key.length > 0;
+  return sameBytes(left, right) && key.length > 0;
 }
 
 function parseIngest(body: unknown): store.IngestInput | string {
@@ -66,13 +79,14 @@ function parseIngest(body: unknown): store.IngestInput | string {
   };
 }
 
-export async function handleApi(request: Request, env: Env): Promise<Response> {
+export async function handleApi(request: Request, ctx: ApiContext): Promise<Response> {
+  const { db, apiKey } = ctx;
   const url = new URL(request.url);
   if (url.pathname === '/api/health') return json({ ok: true, version: VERSION });
 
-  if (!env.BRIDGE_API_KEY) return problem(503, 'The API is off. Set the BRIDGE_API_KEY secret to turn it on.');
-  if (env.BRIDGE_API_KEY.length < 32) return problem(503, 'BRIDGE_API_KEY must be at least 32 characters.');
-  if (!(await authorized(request, env))) {
+  if (!apiKey) return problem(503, 'The API is off. Set an API key (BRIDGE_API_KEY) to turn it on.');
+  if (apiKey.length < 32) return problem(503, 'The API key must be at least 32 characters.');
+  if (!(await authorized(request, apiKey))) {
     return new Response(JSON.stringify({ error: 'Invalid or missing API key.' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json; charset=utf-8', 'WWW-Authenticate': 'Bearer' },
@@ -94,11 +108,11 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
     if (typeof input === 'string') return problem(400, input);
     const projectRef = (body as { project?: string }).project;
     if (projectRef) {
-      const found = await store.resolveProject(env.DB, projectRef);
+      const found = await store.resolveProject(db, projectRef);
       if (!found.match || found.fuzzy) return problem(404, `No project exactly matches "${projectRef}".`);
       input.projectId = found.match.id;
     }
-    return json(await store.ingestConversation(env.DB, input));
+    return json(await store.ingestConversation(db, input));
   }
 
   if (url.pathname === '/api/export' && request.method === 'GET') {
@@ -107,7 +121,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!(store.EXPORT_TABLES as readonly string[]).includes(table)) return problem(400, 'Unknown table.');
     const after = Math.max(0, Number(url.searchParams.get('after') ?? 0) || 0);
     const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit') ?? 200) || 200));
-    return json(await store.exportPage(env.DB, table as (typeof store.EXPORT_TABLES)[number], after, limit));
+    return json(await store.exportPage(db, table as (typeof store.EXPORT_TABLES)[number], after, limit));
   }
 
   return problem(404, 'Not found.');

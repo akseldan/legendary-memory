@@ -6,7 +6,8 @@ import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/sdk/validatio
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { type ConnectionProps, type Env, SCOPE_WRITE, VERSION } from './env';
+import { type ConnectionProps, SCOPE_WRITE, VERSION } from './constants';
+import type { Db } from './db';
 import * as store from './store';
 import { clamp, day, slugify } from './text';
 
@@ -52,10 +53,15 @@ function describeCandidates(projects: store.Project[]): string {
   return projects.map((p) => `- ${p.name} (${p.status}, updated ${day(p.updated_at)})`).join('\n');
 }
 
-export function buildServer(env: Env, props: ConnectionProps, scopes: string[]): McpServer {
-  const db = env.DB;
+export function buildServer(
+  db: Db,
+  props: ConnectionProps,
+  scopes: string[],
+  /** Lets a target report the client's name late (stdio learns it during initialize). */
+  clientName: () => string = () => props?.client ?? '',
+): McpServer {
   const canWrite = scopes.includes(SCOPE_WRITE);
-  const source = sourceLabel(props?.client ?? '');
+  const source = () => sourceLabel(clientName());
   const server = new McpServer(
     { name: 'legendary-memory', title: 'Legendary Memory', version: VERSION },
     { instructions: INSTRUCTIONS, jsonSchemaValidator: new CfWorkerJsonSchemaValidator() },
@@ -337,7 +343,7 @@ export function buildServer(env: Env, props: ConnectionProps, scopes: string[]):
       const saved = await store.saveCheckpoint(
         db,
         target.project,
-        { title: args.title, summary: args.summary, decisions: args.decisions, nextSteps: args.next_steps, source },
+        { title: args.title, summary: args.summary, decisions: args.decisions, nextSteps: args.next_steps, source: source() },
         { brief: args.brief, status: args.status },
       );
       const what = [
@@ -375,7 +381,7 @@ export function buildServer(env: Env, props: ConnectionProps, scopes: string[]):
         name: args.name,
         content: args.content,
         kind: args.kind ?? 'document',
-        source,
+        source: source(),
       });
       const a = saved.artifact;
       return ok(`Saved "${a.name}" (v${a.version}, ${a.size} chars) to "${target.project.name}" (artifact:${a.id}).${redactionNote(saved.redactions)}`);
@@ -451,20 +457,21 @@ function splitRef(ref: string): [string, string] {
   return [ref.slice(0, at).trim().toLowerCase(), ref.slice(at + 1).trim()];
 }
 
-/** Handles POST /mcp for a request the OAuth layer has already authenticated. */
-export const mcpHandler = {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (request.method !== 'POST') {
-      // Stateless server: there is no event stream to open and no session to close.
-      return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
-    }
-    const context = ctx as ExecutionContext & { props?: ConnectionProps; auth?: { scope?: string[] } };
-    const server = buildServer(env, context.props ?? { client: '' }, context.auth?.scope ?? []);
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
-    await server.connect(transport);
-    return transport.handleRequest(request);
-  },
-};
+/** Handles one POST /mcp request. Stateless: there is no session or event stream. */
+export async function handleMcpRequest(
+  request: Request,
+  db: Db,
+  props: ConnectionProps,
+  scopes: string[],
+): Promise<Response> {
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
+  }
+  const server = buildServer(db, props, scopes);
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  await server.connect(transport);
+  return transport.handleRequest(request);
+}
