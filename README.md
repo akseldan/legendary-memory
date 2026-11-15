@@ -30,7 +30,7 @@ memory logic is the same code in all three.
 
 ## Quick start: on your computer, no account
 
-Needs [Node.js](https://nodejs.org) 22.13 or newer.
+Needs [Node.js](https://nodejs.org) 22.20 or newer.
 
 ```sh
 git clone https://github.com/akseldan/legendary-memory && cd legendary-memory/hub

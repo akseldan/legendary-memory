@@ -5,7 +5,7 @@ Gemini CLI). Save a checkpoint in one app, recall it in another. It runs on your
 computer with no account, on your own server, or on Cloudflare's free plan, and your data
 stays with you.
 
-Needs Node.js 22.13 or newer.
+Needs Node.js 22.20 or newer.
 
 ```sh
 git clone https://github.com/akseldan/legendary-memory && cd legendary-memory/hub

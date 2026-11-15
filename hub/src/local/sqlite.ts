@@ -15,11 +15,15 @@ import { MIGRATIONS } from './migrations';
  * plain sentence about what to install instead of a module-not-found stack trace.
  */
 export function loadSqlite(): typeof import('node:sqlite') {
+  // Node 22 before 22.20 ships SQLite without full-text search, which the memory needs.
+  const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
+  const tooOld = major < 22 || (major === 22 && minor < 20);
   try {
+    if (tooOld) throw new Error('too old');
     return createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
   } catch {
     throw new Error(
-      `Legendary Memory needs Node.js 22.13 or newer for its built-in database (this is ${process.version}). Install the current version from https://nodejs.org and try again.`,
+      `Legendary Memory needs Node.js 22.20 or newer for its built-in database (this is ${process.version}). Install the current version from https://nodejs.org and try again.`,
     );
   }
 }

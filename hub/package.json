@@ -43,7 +43,7 @@
     "legendary-memory": "dist/legendary-memory.mjs"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.20"
   },
   "files": [
     "dist/legendary-memory.mjs"
