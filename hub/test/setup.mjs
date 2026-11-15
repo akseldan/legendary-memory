@@ -66,7 +66,7 @@ esac
 );
 chmodSync(join(fakeBin, 'codex'), 0o755);
 
-const desktopDir = join(home, '.config', 'Claude');
+const desktopDir = process.platform === 'darwin' ? join(home, 'Library', 'Application Support', 'Claude') : join(home, '.config', 'Claude');
 const desktopFile = join(desktopDir, 'claude_desktop_config.json');
 const cursorFile = join(home, '.cursor', 'mcp.json');
 const geminiFile = join(home, '.gemini', 'settings.json');

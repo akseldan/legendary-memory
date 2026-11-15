@@ -21,7 +21,7 @@ const check = (name, ok, detail = '') => {
 };
 
 mkdirSync(join(home, '.cursor'), { recursive: true });
-mkdirSync(join(home, '.config', 'Claude'), { recursive: true });
+mkdirSync(process.platform === 'darwin' ? join(home, 'Library', 'Application Support', 'Claude') : join(home, '.config', 'Claude'), { recursive: true });
 const child = spawn(process.execPath, [BIN, 'start', '--no-open', '--port', String(PORT)], {
   env: { HOME: home, XDG_CONFIG_HOME: join(home, '.config'), LEGENDARY_MEMORY_DIR: join(home, '.legendary-memory'), LEGENDARY_MEMORY_KEY: KEY, PATH: '/usr/bin:/bin' },
   stdio: ['ignore', 'ignore', 'pipe'],

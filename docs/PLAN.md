@@ -72,7 +72,7 @@ Do not charge anyone until all of these are true:
 | 1 | Hub: storage, tools, sign-in, importer API | **Done.** 40 end-to-end checks, 31 unit tests. |
 | 1b | Shared core, local target, Cloudflare target | **Done 2026-11-12.** |
 | 2 | Deploy to the owner's Cloudflare, connect Claude | **Done 2026-11-12.** Works from Claude on Mac and iPhone. Production lockout check still open. |
-| 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started. **Biggest open risk, see Risks.** |
+| 3 | Connect ChatGPT (web), confirm Plus runs the tools | **Done 2026-11-15.** A Plus account added the Cloudflare hub as a custom MCP server (Plugins, Add, Add custom MCP server, OAuth), listed all 7 tools, recalled a project and saved a checkpoint that Claude then read back. The August 2026 "no tools" report did not reproduce. |
 | 4 | Import existing history from exports | Importer written and tested on made-up exports. Optional one-time backfill; not run on real exports. |
 | 5 | Browser extension for automatic capture | Not started. Needs the owner present to test. |
 | 6 | Obsidian mirror | Done 2026-11-12. Not yet run on the real vault. |
@@ -396,9 +396,9 @@ Run from `hub/`. A `.dev.vars` file with local-only values is needed (copy
 instructions: "Use Legendary Memory: recall a project before working on it and save a
 checkpoint when we finish a session."
 
-**Phase 3: ChatGPT.** Developer mode is documented for Plus, but one dated report (August
-2026) found a Plus account completing sign-in and then listing no tools. Test before
-building further on it. Expect friction that cannot be removed from our side: Developer
+**Phase 3: ChatGPT.** Tested 2026-11-15: a Plus account lists all tools and can save (see the
+status table). Developer mode is documented for Plus, but one dated report (August
+2026) found a Plus account completing sign-in and then listing no tools; that did not reproduce. Expect friction that cannot be removed from our side: Developer
 mode and the app must be selected in each new chat, and saves ask for confirmation each
 conversation. If Plus cannot run the tools, ChatGPT falls back to the extension (phase 5)
 for capture and a paste button for recall.
