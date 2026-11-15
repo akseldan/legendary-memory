@@ -449,6 +449,8 @@ export interface IngestInput {
   title?: string;
   url?: string;
   startedAt?: string;
+  /** The chat's own last-change date. Copying a memory between homes passes it so dates survive. */
+  updatedAt?: string;
   projectId?: string | null;
   messages: IngestMessage[];
 }
@@ -462,7 +464,7 @@ export async function ingestConversation(
   db: Db,
   input: IngestInput,
 ): Promise<{ id: string; created: boolean; messages: number; redactions: number }> {
-  const now = nowIso();
+  const now = input.updatedAt ?? nowIso();
   const existing = await db
     .prepare('SELECT id, project_id, title, started_at FROM conversations WHERE source = ?1 AND external_id = ?2')
     .bind(input.source, input.externalId)
@@ -619,4 +621,257 @@ export async function exportPage(db: Db, table: (typeof EXPORT_TABLES)[number], 
     .all<Record<string, unknown> & { _rowid: number }>();
   const last = results[results.length - 1];
   return { table, rows: results, next: results.length === limit && last ? last._rowid : null };
+}
+
+// ---------------------------------------------------------------------- import
+
+export const IMPORT_TABLES = ['projects', 'brief_versions', 'checkpoints', 'artifacts', 'profile'] as const;
+export type ImportTable = (typeof IMPORT_TABLES)[number];
+
+/** A row the caller sent is malformed; the message says which field and what to fix. */
+export class ImportError extends Error {}
+
+export interface ImportResult {
+  inserted: number;
+  same: number;
+  replaced: number;
+  /** Rows that differ from the destination's, where the destination's was kept. */
+  kept: number;
+  /** Rows whose project is on neither side. */
+  skipped: number;
+  notes: string[];
+  /** Source project id -> destination project id, for the rows that follow. */
+  idMap: Record<string, string>;
+}
+
+type Row = Record<string, unknown>;
+const NOTES_KEPT = 50;
+
+/**
+ * Add rows exported from another memory, keeping their ids and dates. Additive: the
+ * destination wins on a difference unless `replace` is set and the incoming row is newer.
+ * With `dryRun`, reports what would happen and writes nothing.
+ */
+export async function importRows(
+  db: Db,
+  table: ImportTable,
+  rows: Row[],
+  options: { replace?: boolean; dryRun?: boolean; idMap?: Record<string, string> } = {},
+): Promise<ImportResult> {
+  const out: ImportResult = { inserted: 0, same: 0, replaced: 0, kept: 0, skipped: 0, notes: [], idMap: { ...options.idMap } };
+  const statements: Statement[] = [];
+  const touched = new Set<string>();
+  const note = (line: string) => {
+    if (out.notes.length < NOTES_KEPT) out.notes.push(line);
+  };
+  const text = (row: Row, field: string, optional = false): string => {
+    const value = row[field];
+    if (typeof value === 'string') return value;
+    if (optional && value == null) return '';
+    throw new ImportError(`${table} row needs "${field}" as text.`);
+  };
+  const date = (row: Row, field: string): string => {
+    const value = text(row, field);
+    if (Number.isNaN(Date.parse(value))) throw new ImportError(`${table} row has an invalid date in "${field}".`);
+    return value;
+  };
+  const newer = (incoming: string, stored: string) => Date.parse(incoming) > Date.parse(stored);
+  // The map is authoritative for projects that came with this copy, because in a dry run
+  // they are not written yet.
+  const projectFor = async (row: Row): Promise<string | null> => {
+    const source = text(row, 'project_id');
+    const mapped = out.idMap[source];
+    if (mapped) return mapped;
+    return (await db.prepare('SELECT id FROM projects WHERE id = ?1').bind(source).first<{ id: string }>()) ? source : null;
+  };
+
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null) throw new ImportError(`Each ${table} row must be an object.`);
+    switch (table) {
+      case 'projects': {
+        const id = text(row, 'id');
+        const slug = text(row, 'slug');
+        const name = redact(text(row, 'name')).text;
+        const status = text(row, 'status');
+        if (!['active', 'paused', 'done', 'archived'].includes(status)) throw new ImportError(`projects row has an unknown status "${status}".`);
+        const brief = redact(text(row, 'brief', true)).text;
+        const aliases = redact(text(row, 'aliases', true)).text;
+        const created = date(row, 'created_at');
+        const updated = date(row, 'updated_at');
+        const found = await db
+          .prepare('SELECT * FROM projects WHERE id = ?1 OR slug = ?2 OR lower(name) = lower(?3) ORDER BY (id = ?1) DESC LIMIT 1')
+          .bind(id, slug, name)
+          .first<Project>();
+        if (!found) {
+          out.idMap[id] = id;
+          out.inserted++;
+          statements.push(
+            db
+              .prepare('INSERT INTO projects (id, slug, name, aliases, status, brief, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
+              .bind(id, slug, name, aliases, status, brief, created, updated),
+            ...reindex(db, 'project', id, id, `${name} ${aliases}`, brief, updated),
+          );
+          break;
+        }
+        out.idMap[id] = found.id;
+        const merged = redact(
+          [...new Set([...found.aliases.split(','), ...aliases.split(',')].map((a) => a.trim()).filter(Boolean))].slice(0, 12).join(', '),
+        ).text;
+        let nextBrief = found.brief;
+        let outcome: 'same' | 'replaced' | 'kept' = 'same';
+        if (brief && brief !== found.brief) {
+          if (options.replace && newer(updated, found.updated_at)) {
+            statements.push(
+              db.prepare('INSERT INTO brief_versions (project_id, brief, replaced_at) VALUES (?1, ?2, ?3)').bind(found.id, found.brief, updated),
+            );
+            touched.add(found.id);
+            nextBrief = brief;
+            outcome = 'replaced';
+            note(`${found.name}: brief replaced by the newer one (the old one is in its history)`);
+          } else {
+            outcome = 'kept';
+            note(`${found.name}: brief differs, kept the destination's`);
+            // Nothing is lost: the other brief goes to history, unless it is already there.
+            const have = await db
+              .prepare('SELECT 1 FROM brief_versions WHERE project_id = ?1 AND brief = ?2')
+              .bind(found.id, brief)
+              .first();
+            if (!have) {
+              statements.push(
+                db.prepare('INSERT INTO brief_versions (project_id, brief, replaced_at) VALUES (?1, ?2, ?3)').bind(found.id, brief, updated),
+              );
+              touched.add(found.id);
+            }
+          }
+        }
+        if (nextBrief !== found.brief || merged !== found.aliases) {
+          const stamp = newer(updated, found.updated_at) ? updated : found.updated_at;
+          statements.push(
+            db.prepare('UPDATE projects SET brief = ?2, aliases = ?3, updated_at = ?4 WHERE id = ?1').bind(found.id, nextBrief, merged, stamp),
+            ...reindex(db, 'project', found.id, found.id, `${found.name} ${merged}`, nextBrief, stamp),
+          );
+        }
+        out[outcome]++;
+        break;
+      }
+      case 'brief_versions': {
+        const project = await projectFor(row);
+        if (!project) {
+          out.skipped++;
+          break;
+        }
+        const brief = redact(text(row, 'brief')).text;
+        const at = date(row, 'replaced_at');
+        const have = await db
+          .prepare('SELECT 1 FROM brief_versions WHERE project_id = ?1 AND brief = ?2 AND replaced_at = ?3')
+          .bind(project, brief, at)
+          .first();
+        if (have) {
+          out.same++;
+          break;
+        }
+        out.inserted++;
+        touched.add(project);
+        statements.push(db.prepare('INSERT INTO brief_versions (project_id, brief, replaced_at) VALUES (?1, ?2, ?3)').bind(project, brief, at));
+        break;
+      }
+      case 'checkpoints': {
+        const project = await projectFor(row);
+        if (!project) {
+          out.skipped++;
+          break;
+        }
+        const id = text(row, 'id');
+        if (await db.prepare('SELECT 1 FROM checkpoints WHERE id = ?1').bind(id).first()) {
+          out.same++;
+          break;
+        }
+        const title = redact(text(row, 'title')).text;
+        const summary = redact(text(row, 'summary')).text;
+        const decisions = redact(text(row, 'decisions', true)).text;
+        const nextSteps = redact(text(row, 'next_steps', true)).text;
+        const created = date(row, 'created_at');
+        out.inserted++;
+        statements.push(
+          db
+            .prepare('INSERT INTO checkpoints (id, project_id, source, title, summary, decisions, next_steps, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
+            .bind(id, project, text(row, 'source'), title, summary, decisions, nextSteps, created),
+          ...reindex(db, 'checkpoint', id, project, title, [summary, decisions, nextSteps].filter(Boolean).join('\n'), created),
+        );
+        break;
+      }
+      case 'artifacts': {
+        const project = await projectFor(row);
+        if (!project) {
+          out.skipped++;
+          break;
+        }
+        const id = text(row, 'id');
+        const name = redact(text(row, 'name').trim()).text;
+        const content = redact(text(row, 'content')).text;
+        const updated = date(row, 'updated_at');
+        const found = await db
+          .prepare('SELECT id, content, updated_at, version FROM artifacts WHERE id = ?1 OR (project_id = ?2 AND name = ?3) LIMIT 1')
+          .bind(id, project, name)
+          .first<{ id: string; content: string; updated_at: string; version: number }>();
+        if (!found) {
+          out.inserted++;
+          statements.push(
+            db
+              .prepare('INSERT INTO artifacts (id, project_id, name, kind, content, version, source, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)')
+              .bind(id, project, name, text(row, 'kind', true) || 'text', content, Number(row.version) || 1, text(row, 'source'), date(row, 'created_at'), updated),
+            ...reindex(db, 'artifact', id, project, name, content, updated),
+          );
+        } else if (found.content === content) {
+          out.same++;
+        } else if (options.replace && newer(updated, found.updated_at)) {
+          out.replaced++;
+          note(`file ${name}: replaced by the newer one`);
+          statements.push(
+            db
+              .prepare('UPDATE artifacts SET kind = ?2, content = ?3, version = ?4, source = ?5, updated_at = ?6 WHERE id = ?1')
+              .bind(found.id, text(row, 'kind', true) || 'text', content, found.version + 1, text(row, 'source'), updated),
+            ...reindex(db, 'artifact', found.id, project, name, content, updated),
+          );
+        } else {
+          out.kept++;
+          note(`file ${name}: differs, kept the destination's`);
+        }
+        break;
+      }
+      case 'profile': {
+        const key = text(row, 'key');
+        const value = redact(text(row, 'value')).text;
+        const updated = date(row, 'updated_at');
+        const found = await db.prepare('SELECT value, updated_at FROM profile WHERE key = ?1').bind(key).first<{ value: string; updated_at: string }>();
+        const index = () => reindex(db, 'profile', key, null, key.replace(/-/g, ' '), value, updated);
+        if (!found) {
+          out.inserted++;
+          statements.push(db.prepare('INSERT INTO profile (key, value, updated_at) VALUES (?1, ?2, ?3)').bind(key, value, updated), ...index());
+        } else if (found.value === value) {
+          out.same++;
+        } else if (options.replace && newer(updated, found.updated_at)) {
+          out.replaced++;
+          note(`fact ${key}: replaced by the newer one`);
+          statements.push(db.prepare('UPDATE profile SET value = ?2, updated_at = ?3 WHERE key = ?1').bind(key, value, updated), ...index());
+        } else {
+          out.kept++;
+          note(`fact ${key}: differs, kept the destination's`);
+        }
+        break;
+      }
+    }
+  }
+  for (const project of touched) {
+    statements.push(
+      db
+        .prepare(
+          `DELETE FROM brief_versions WHERE project_id = ?1 AND id NOT IN
+             (SELECT id FROM brief_versions WHERE project_id = ?1 ORDER BY id DESC LIMIT ${BRIEF_VERSIONS_KEPT})`,
+        )
+        .bind(project),
+    );
+  }
+  if (!options.dryRun && statements.length > 0) await db.batch(statements);
+  return out;
 }

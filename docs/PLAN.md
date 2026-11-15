@@ -81,7 +81,7 @@ Do not charge anyone until all of these are true:
 | 9 | **One-click Claude Desktop install** (`.mcpb`) | **Bundle builds and validates. Never installed in Claude Desktop. The owner's Claude Desktop (5.11492.5, checked 2026-11-15) reports Node.js 24.22.1, above the 22.13 the bundle needs, so the Node question looks settled.** |
 | 10 | **Skill** (`skills/legendary-memory/SKILL.md`) | **Written. Not yet loaded in an agent.** |
 | 11 | Publish: npm, GitHub release, directories | Not started. Needs the owner's npm account. |
-| 12 | Copy a memory between homes (local, own server, cloud) | Not started |
+| 12 | Copy a memory between homes (local, own server, cloud) | **Done 2026-11-15** as `legendary-memory copy --from <hub> --to <hub>`: report only until `--apply`, additive, safe to repeat, keeps ids and dates, re-redacts on the way in, keys from the environment or a hidden prompt. Needs a new server endpoint (`POST /api/import`), so a destination already deployed must be updated first (the owner's Cloudflare hub is not yet). 37 checks across local, own-server and .db-file targets. Not run against D1 (batch and size limits unverified). |
 | 13 | **Welcome page and "your memory" view** (`legendary-memory start`) | **Done 2026-11-15: guided setup in the browser, live wait for the first checkpoint, read-only list of projects. 17 endpoint checks plus a full click-through in a headless browser. Not yet opened on a real Mac. Search, editing a brief and deleting a project or session were added 2026-11-15 (37 endpoint checks, clicked through in Chrome on sample data). Not yet on `host`.** |
 | 14 | Hosted service | Design sketch only (below) |
 

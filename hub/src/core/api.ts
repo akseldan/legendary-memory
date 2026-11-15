@@ -8,6 +8,7 @@ import * as store from './store';
 
 const MAX_BODY_BYTES = 1_500_000;
 const MAX_MESSAGES = 2000;
+const MAX_IMPORT_ROWS = 100;
 const SOURCES = new Set(['chatgpt', 'claude', 'gemini', 'other']);
 const ROLES = new Set(['user', 'assistant', 'system', 'tool']);
 
@@ -64,17 +65,19 @@ function parseIngest(body: unknown): store.IngestInput | string {
     if (typeof m.text !== 'string') return 'Each message needs text.';
     messages.push({ seq: m.seq as number, role: m.role, text: m.text });
   }
-  for (const field of ['title', 'url', 'started_at', 'project'] as const) {
+  for (const field of ['title', 'url', 'started_at', 'updated_at', 'project', 'project_id'] as const) {
     if (b[field] !== undefined && typeof b[field] !== 'string') return `${field} must be a string.`;
   }
   if (typeof b.url === 'string' && b.url && !/^https:\/\//.test(b.url)) return 'url must start with https://.';
   if (typeof b.started_at === 'string' && Number.isNaN(Date.parse(b.started_at))) return 'started_at must be a date.';
+  if (typeof b.updated_at === 'string' && Number.isNaN(Date.parse(b.updated_at))) return 'updated_at must be a date.';
   return {
     source: b.source,
     externalId: b.external_id,
     title: b.title as string | undefined,
     url: ((b.url as string | undefined) ?? '').slice(0, 500),
     startedAt: b.started_at ? new Date(b.started_at as string).toISOString() : undefined,
+    updatedAt: b.updated_at ? new Date(b.updated_at as string).toISOString() : undefined,
     messages,
   };
 }
@@ -106,13 +109,38 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
     }
     const input = parseIngest(body);
     if (typeof input === 'string') return problem(400, input);
-    const projectRef = (body as { project?: string }).project;
-    if (projectRef) {
+    const { project: projectRef, project_id: projectId } = body as { project?: string; project_id?: string };
+    if (projectId) {
+      if (!(await store.getProject(db, projectId))) return problem(404, `No project has the id "${projectId}".`);
+      input.projectId = projectId;
+    } else if (projectRef) {
       const found = await store.resolveProject(db, projectRef);
       if (!found.match || found.fuzzy) return problem(404, `No project exactly matches "${projectRef}".`);
       input.projectId = found.match.id;
     }
     return json(await store.ingestConversation(db, input));
+  }
+
+  // Rows exported from another memory, written with their ids and dates (see `legendary-memory copy`).
+  if (url.pathname === '/api/import' && request.method === 'POST') {
+    const raw = await request.text();
+    if (raw.length > MAX_BODY_BYTES) return problem(413, 'Body too large. Send fewer rows per request.');
+    let body: { table?: unknown; rows?: unknown; replace?: unknown; dry_run?: unknown; id_map?: unknown };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return problem(400, 'Body is not valid JSON.');
+    }
+    const table = (store.IMPORT_TABLES as readonly unknown[]).includes(body.table) ? (body.table as store.ImportTable) : null;
+    if (!table) return problem(400, `table must be one of: ${store.IMPORT_TABLES.join(', ')}.`);
+    if (!Array.isArray(body.rows) || body.rows.length > MAX_IMPORT_ROWS) return problem(400, `rows must be an array of at most ${MAX_IMPORT_ROWS}.`);
+    const idMap = typeof body.id_map === 'object' && body.id_map !== null ? (body.id_map as Record<string, string>) : {};
+    try {
+      return json(await store.importRows(db, table, body.rows, { replace: body.replace === true, dryRun: body.dry_run === true, idMap }));
+    } catch (error) {
+      if (error instanceof store.ImportError) return problem(400, error.message);
+      throw error;
+    }
   }
 
   if (url.pathname === '/api/export' && request.method === 'GET') {

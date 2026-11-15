@@ -8,6 +8,7 @@
  *   legendary-memory stdio        MCP over stdin/stdout (what those apps run)
  *   legendary-memory serve        local HTTP on 127.0.0.1 (importer, extension, HTTP clients)
  *   legendary-memory host         reachable from the internet with sign-in (phone, web apps)
+ *   legendary-memory copy         add one memory's contents to another (computer, server, file)
  *   legendary-memory info         where things are, plus copy-paste connector settings
  */
 import { spawn } from 'node:child_process';
@@ -42,6 +43,9 @@ const USAGE = `Legendary Memory ${VERSION}: one memory shared across your AI ass
   legendary-memory start               Open the welcome page in your browser (start here)
   legendary-memory setup [--dry-run]   Connect the AI apps on this computer from the terminal
   legendary-memory setup --undo        Disconnect them again
+  legendary-memory copy --from <hub> --to <hub> [--apply] [--replace-older] [--only projects,chats,profile]
+                                       Add one memory to another. <hub> is https://..., http://127.0.0.1:PORT,
+                                       "local" or a .db file. Reports only until you add --apply
   legendary-memory info                Show where your data is and settings to paste by hand
   legendary-memory serve [--port N]    Local-only HTTP server for the importer and extension
   legendary-memory host --url https://your-address [--port N] [--bind ADDR] [--behind-proxy]
@@ -168,6 +172,23 @@ async function main(): Promise<void> {
       });
       console.error(`Legendary Memory ${VERSION} hosting on ${bind}:${port}  (database: ${dbPath()})`);
       console.error(`Add this as a custom connector in Claude or ChatGPT:  ${origin.origin}/mcp`);
+      return;
+    }
+    case 'copy': {
+      if (['--key', '--from-key', '--to-key'].some(has)) {
+        throw new Error(
+          'Keys are not accepted on the command line, where they stay in your shell history.\n' +
+            'Set LEGENDARY_MEMORY_FROM_KEY and LEGENDARY_MEMORY_TO_KEY, or leave them unset to be asked.',
+        );
+      }
+      const from = flag('--from');
+      const to = flag('--to');
+      if (!from || !to) throw new Error('copy needs both addresses, for example:\n  legendary-memory copy --from local --to https://memory.example.com');
+      const { GROUPS, runCopy } = await import('./copy');
+      const asked = (flag('--only') ?? GROUPS.join(',')).split(',').map((g) => g.trim());
+      const unknown = asked.filter((g) => !(GROUPS as readonly string[]).includes(g));
+      if (unknown.length) throw new Error(`--only takes ${GROUPS.join(', ')}; "${unknown.join(', ')}" is not one of them.`);
+      await runCopy({ from, to, apply: has('--apply'), replaceOlder: has('--replace-older'), only: new Set(asked as (typeof GROUPS)[number][]) });
       return;
     }
     case 'info': {
