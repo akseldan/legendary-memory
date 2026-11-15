@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "legendary-memory",
   "display_name": "Legendary Memory",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "One memory shared across your AI assistants, kept in a file on this computer.",
   "long_description": "Start a project in one AI app and continue it in another with no re-explaining. Each project has a living brief, session notes and saved files. Everything is stored in one SQLite file in your home folder (~/.legendary-memory); nothing is sent anywhere and no account is needed.",
   "author": { "name": "akseldan", "url": "https://github.com/akseldan" },

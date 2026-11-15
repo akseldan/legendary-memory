@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legendary Memory</title>
+<meta name="description" content="One memory shared by every AI you use. Start a project in one app, recall it in another. Free, open source, and kept on your own computer.">
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #f7f4ee; --card: #fffdf9; --ink: #1f1d1a; --soft: #6a645b; --line: #e4ddd0; --line-strong: #cfc6b6;
+    --on-ink: #f7f4ee; --glow: #3b5bff; --mesh: 1;
+    --display: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #1d1c1a; --card: #272522; --ink: #ece8dc; --soft: #a49e91; --line: #38352f; --line-strong: #4a463e; --on-ink: #1d1c1a; --glow: #7d92ff; --mesh: .4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 1.0625rem/1.6 var(--body); -webkit-font-smoothing: antialiased; position: relative; overflow-x: hidden; }
+  body::before {
+    content: ""; position: fixed; inset: -10%; z-index: 0; pointer-events: none; opacity: var(--mesh); filter: blur(34px);
+    background:
+      radial-gradient(38% 34% at 14% 18%, #ffd7b5, transparent 72%),
+      radial-gradient(36% 38% at 88% 12%, #fff1b8, transparent 72%),
+      radial-gradient(44% 42% at 84% 92%, #ffc8d6, transparent 72%),
+      radial-gradient(40% 40% at 8% 88%, #c3dcff, transparent 72%);
+  }
+  a { color: inherit; text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; border-radius: 8px; }
+  h1, h2, h3, p { margin: 0; }
+  code { font: 0.92em ui-monospace, "SF Mono", Menlo, monospace; }
+  .wrap { position: relative; z-index: 1; max-width: 56rem; margin: 0 auto; padding: 0 clamp(20px, 5vw, 40px); }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 22px 0 0; font: 800 1.0625rem/1 var(--display); letter-spacing: -0.01em; }
+  header a { font: 500 0.9375rem var(--body); color: var(--soft); }
+  header svg { width: 28px; height: 28px; fill: none; stroke: var(--ink); stroke-width: 2; vertical-align: -8px; margin-right: 10px; }
+  .hero { text-align: center; padding: clamp(40px, 9vh, 96px) 0 24px; }
+  h1 { font: 800 clamp(2.5rem, 6.4vw, 4.4rem)/1.02 var(--display); letter-spacing: -0.035em; text-wrap: balance; }
+  .lede { margin: 18px auto 0; max-width: 34rem; color: var(--soft); font-size: 1.1875rem; text-wrap: pretty; }
+  .lede b { color: var(--ink); font-weight: 600; }
+  .go { display: inline-flex; align-items: center; justify-content: center; min-height: 56px; padding: 0 36px; margin-top: 32px; border-radius: 16px; background: var(--ink); color: var(--on-ink); font-weight: 650; font-size: 1.0625rem; text-decoration: none; box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--ink) 70%, transparent); }
+  .go:hover { transform: translateY(-1px); }
+  .fine { margin-top: 12px; color: var(--soft); font-size: 0.9375rem; }
+  .chips { margin: 26px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .chips li { padding: 8px 16px; border-radius: 999px; background: var(--glow); color: #fff; font: 650 0.9375rem/1 var(--body); box-shadow: 0 6px 22px -4px color-mix(in srgb, var(--glow) 65%, transparent); }
+  @media (prefers-color-scheme: dark) { .chips li { color: #0f1020; } }
+  .story { margin: 44px auto 0; width: min(100%, 760px); }
+  .story svg { width: 100%; height: auto; display: block; }
+  .story .tall { display: none; }
+  @media (max-width: 620px) { .story .wide { display: none; } .story .tall { display: block; max-width: 340px; margin: 0 auto; } }
+  .win { fill: var(--card); stroke: var(--line-strong); stroke-width: 1.2; }
+  .bubble { fill: color-mix(in srgb, var(--ink) 7%, var(--card)); }
+  .bubble.me { fill: var(--ink); }
+  .story text { font: 500 13.5px var(--body); fill: var(--ink); }
+  .story text.me { fill: var(--on-ink); }
+  .story text.title { font: 700 12.5px var(--body); fill: var(--soft); }
+  .dotw { fill: var(--line-strong); }
+  .thread { fill: none; stroke: url(#thr); stroke-width: 3.5; stroke-linecap: round; }
+  .knot { fill: url(#knotfill); }
+  .knot-ring { fill: none; stroke: var(--ink); stroke-width: 2; }
+  .tag { fill: var(--glow); }
+  .story text.tagt { fill: #fff; font: 650 11.5px var(--body); }
+  .story text.kn { font: 800 14px var(--display); text-anchor: middle; }
+  section { margin-top: clamp(56px, 10vh, 96px); }
+  h2 { font: 800 clamp(1.5rem, 3.4vw, 2rem)/1.15 var(--display); letter-spacing: -0.025em; text-align: center; }
+  .steps { list-style: none; margin: 30px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; counter-reset: s; }
+  @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
+  .steps li { counter-increment: s; position: relative; padding: 22px 20px 20px; border-radius: 20px; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1.5px solid var(--line); backdrop-filter: blur(6px); }
+  .steps li::before { content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--on-ink); font: 750 0.9375rem var(--display); margin-bottom: 12px; }
+  .steps b { display: block; font: 750 1.0625rem/1.25 var(--display); letter-spacing: -0.01em; margin-bottom: 6px; }
+  .steps span { color: var(--soft); font-size: 0.9875rem; }
+  .say { display: block; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 7%, var(--card)); color: var(--ink); font-size: 0.9375rem; }
+  .faq { margin: 26px auto 0; max-width: 42rem; display: grid; gap: 10px; }
+  details { border-radius: 16px; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1.5px solid var(--line); backdrop-filter: blur(6px); }
+  details[open] { border-color: var(--line-strong); }
+  summary { cursor: pointer; padding: 16px 20px; list-style: none; display: flex; justify-content: space-between; gap: 16px; font-weight: 650; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--soft); font-weight: 500; font-size: 1.25rem; line-height: 1; }
+  details[open] > summary::after { content: "\2212"; }
+  details p { padding: 0 20px 18px; color: var(--soft); }
+  details p + p { margin-top: -8px; }
+  footer { padding: 64px 0 36px; text-align: center; color: var(--soft); font-size: 0.9375rem; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span><svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="10" cy="14" r="7"/><circle cx="18" cy="14" r="7"/></svg>Legendary Memory</span>
+    <a href="https://github.com/akseldan/legendary-memory">GitHub</a>
+  </header>
+
+  <div class="hero">
+    <h1>One memory for every AI you use</h1>
+    <p class="lede">Start a project in one app. Say <b>recall it</b> in another. Nothing to explain twice.</p>
+    <a class="go" href="https://github.com/akseldan/legendary-memory/releases/latest/download/legendary-memory.mcpb">Download for Claude Desktop</a>
+    <p class="fine">Free. About 0.4 MB. Tested on a Mac with Claude Desktop.</p>
+    <ul class="chips" aria-label="What to know first">
+      <li>Free and open source</li>
+      <li>Stays on this computer</li>
+      <li>Undo any time</li>
+    </ul>
+    <div class="story" aria-hidden="true">
+      <svg class="wide" viewBox="0 0 760 250">
+        <defs>
+          <linearGradient id="thr" x1="0" x2="1"><stop offset="0" stop-color="#3b5bff"/><stop offset="1" stop-color="#ff6f91"/></linearGradient>
+          <radialGradient id="knotfill" cx=".35" cy=".3"><stop offset="0" stop-color="#fff1b8"/><stop offset="1" stop-color="#ffb3c6"/></radialGradient>
+        </defs>
+        <rect class="win" x="2" y="28" width="262" height="194" rx="20"/>
+        <circle class="dotw" cx="24" cy="50" r="4.5"/><circle class="dotw" cx="40" cy="50" r="4.5"/><circle class="dotw" cx="56" cy="50" r="4.5"/>
+        <text class="title" x="132" y="54">Claude</text>
+        <rect class="bubble me" x="62" y="74" width="190" height="42" rx="14"/>
+        <text class="me" x="76" y="100">Chose the fan curve.</text>
+        <rect class="bubble" x="14" y="130" width="206" height="42" rx="14"/>
+        <text x="28" y="156">Noted. Saving a checkpoint.</text>
+        <rect class="tag" x="14" y="184" width="132" height="26" rx="13"/>
+        <text class="tagt" x="28" y="201">Saved to memory</text>
+        <path class="thread" d="M266,125 C300,125 310,125 338,125"/>
+        <path class="thread" d="M422,125 C450,125 460,125 494,125"/>
+        <circle class="knot" cx="380" cy="125" r="42"/><circle class="knot-ring" cx="380" cy="125" r="42"/>
+        <text class="kn" x="380" y="196">Your memory</text>
+        <rect class="win" x="496" y="28" width="262" height="194" rx="20"/>
+        <circle class="dotw" cx="518" cy="50" r="4.5"/><circle class="dotw" cx="534" cy="50" r="4.5"/><circle class="dotw" cx="550" cy="50" r="4.5"/>
+        <text class="title" x="626" y="54">ChatGPT</text>
+        <rect class="bubble me" x="538" y="74" width="208" height="42" rx="14"/>
+        <text class="me" x="552" y="100">Recall the Cooling project</text>
+        <rect class="bubble" x="508" y="130" width="238" height="68" rx="14"/>
+        <text x="522" y="154">Picking up: thermistor fan</text>
+        <text x="522" y="176">curve. Next, test under load.</text>
+      </svg>
+      <svg class="tall" viewBox="0 0 340 330">
+        <rect class="win" x="2" y="2" width="336" height="96" rx="18"/>
+        <rect class="bubble me" x="64" y="16" width="262" height="30" rx="12"/>
+        <text class="me" x="78" y="36">Claude: chose the fan curve.</text>
+        <rect class="tag" x="14" y="58" width="132" height="26" rx="13"/>
+        <text class="tagt" x="28" y="75">Saved to memory</text>
+        <path class="thread" d="M170,100 L170,124"/>
+        <circle class="knot" cx="170" cy="164" r="36"/><circle class="knot-ring" cx="170" cy="164" r="36"/>
+        <text class="kn" x="218" y="169" style="text-anchor:start">Your memory</text>
+        <path class="thread" d="M170,206 L170,230"/>
+        <rect class="win" x="2" y="232" width="336" height="96" rx="18"/>
+        <rect class="bubble me" x="64" y="246" width="262" height="30" rx="12"/>
+        <text class="me" x="78" y="266">ChatGPT: recall the Cooling project</text>
+        <text x="16" y="302">Picking up: thermistor fan curve.</text>
+      </svg>
+    </div>
+  </div>
+
+  <section>
+    <h2>Three steps</h2>
+    <ol class="steps">
+      <li><b>Download and open it</b><span>Double-click the file you downloaded. Claude Desktop asks to install it. Say yes.</span></li>
+      <li><b>Save a project</b><span>In a chat, say:<code class="say">Save a checkpoint for this project.</code></span></li>
+      <li><b>Pick it up anywhere</b><span>In any connected app, say:<code class="say">Recall the Cooling project.</code></span></li>
+    </ol>
+    <p class="fine" style="text-align:center">New here? In Claude Desktop, open the prompt menu and choose <b>Get started with Legendary Memory</b> for a short tour.</p>
+  </section>
+
+  <section>
+    <h2>Good to know</h2>
+    <div class="faq">
+      <details><summary>Where does my memory live?</summary>
+        <p>In one file on your computer, <code>~/.legendary-memory/memory.db</code>. Nothing is sent anywhere and there is no account. Back it up by copying the file.</p></details>
+      <details><summary>Which apps does it work with?</summary>
+        <p>Claude Desktop, with this download. Claude Code, Codex, Cursor, Windsurf and Gemini CLI connect through a one-command setup from the GitHub page. Claude on the web and phone, and ChatGPT, need a version that lives on the internet, which you run yourself on Cloudflare's free plan; the steps are on GitHub.</p></details>
+      <details><summary>How do I remove it?</summary>
+        <p>Open Claude Desktop, go to Settings, then Extensions, and remove Legendary Memory. Your saved memory file stays until you delete it.</p></details>
+      <details><summary>Can I see or delete what it saved?</summary>
+        <p>Yes. Ask any connected assistant to show or forget something, or run the welcome page from the GitHub project to browse, edit and delete your projects.</p></details>
+      <details><summary>Is it finished?</summary>
+        <p>This is version 1. The Claude Desktop install and the Claude Code connection are tested on a Mac. Other apps, Windows, and the self-hosted versions pass automated tests but are newer, so expect rough edges and tell us on GitHub.</p></details>
+    </div>
+  </section>
+
+  <footer>
+    <a href="https://github.com/akseldan/legendary-memory">Source on GitHub</a> &middot;
+    <a href="https://github.com/akseldan/legendary-memory/releases">All releases</a> &middot; MIT license
+  </footer>
+</div>
+</body>
+</html>

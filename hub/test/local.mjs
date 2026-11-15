@@ -61,6 +61,12 @@ try {
   const tools = (await mcp('tools/list', {})).body.result?.tools ?? [];
   check('seven tools listed', tools.length === 7, tools.map((t) => t.name).join());
 
+  const prompts = (await mcp('prompts/list', {})).body.result?.prompts ?? [];
+  check('a get-started prompt is offered', prompts.some((p) => p.name === 'get-started' && /Get started/.test(p.title)), JSON.stringify(prompts));
+  const tour = (await mcp('prompts/get', { name: 'get-started' })).body.result;
+  check('the prompt asks for a tour and a first checkpoint', /recall/.test(tour?.messages?.[0]?.content?.text ?? '') && /first checkpoint/.test(tour?.messages?.[0]?.content?.text ?? ''), JSON.stringify(tour));
+  check('an empty memory explains itself on first recall', /first time/.test(text(await call('recall', {}))) && /save a checkpoint/.test(text(await call('recall', { project: 'anything' }))));
+
   const saved = await call('save_checkpoint', {
     project: 'Cooling System', title: 'First session', summary: 'Chose a quartzite heatsink for the zebrafish rig.',
     decisions: ['Use quartzite because it is cheap'], next_steps: ['Order parts'], brief: 'Goal: cool the rig.',
