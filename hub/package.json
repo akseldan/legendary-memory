@@ -13,14 +13,16 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.local.json",
     "test": "vitest run",
     "e2e": "node test/e2e.mjs",
-    "build:local": "esbuild src/local/cli.ts --bundle --platform=node --target=node22 --format=esm --loader:.sql=text --external:node:sqlite --alias:hub-worker=./src/cloudflare/index.ts --alias:cloudflare:workers=./src/local/cf-shim.ts --outfile=dist/legendary-memory.mjs",
+    "build:local": "esbuild src/local/cli.ts --bundle --platform=node --target=node22 --format=esm --loader:.sql=text --loader:.html=text --external:node:sqlite --alias:hub-worker=./src/cloudflare/index.ts --alias:cloudflare:workers=./src/local/cf-shim.ts --outfile=dist/legendary-memory.mjs",
     "local": "npm run build:local && node dist/legendary-memory.mjs serve",
     "test:local": "npm run build:local && node test/local.mjs",
     "test:host": "npm run build:local && node test/host.mjs",
     "test:setup": "npm run build:local && node test/setup.mjs",
     "pack:mcpb": "npm run build:local && node ../packaging/mcpb/pack.mjs",
-    "test:all": "npm run typecheck && vitest run && npm run build:local && node test/local.mjs && node test/host.mjs && node test/setup.mjs",
-    "prepublishOnly": "npm run test:all"
+    "test:all": "npm run typecheck && vitest run && npm run build:local && node test/local.mjs && node test/host.mjs && node test/setup.mjs && node test/ui.mjs",
+    "prepublishOnly": "npm run test:all",
+    "start": "npm run build:local && node dist/legendary-memory.mjs start",
+    "test:ui": "npm run build:local && node test/ui.mjs"
   },
   "devDependencies": {
     "@cfworker/json-schema": "^4.1.6",

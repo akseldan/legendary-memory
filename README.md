@@ -16,7 +16,7 @@ server of your own, or on Cloudflare's free plan. Your data stays with you in ev
 | | Your computer | Your own server | Your Cloudflare account |
 |---|---|---|---|
 | Account needed | None | None (a domain or a tunnel for the address) | Free Cloudflare account |
-| Setup | `legendary-memory setup` | `docker compose up -d` | `wrangler deploy` |
+| Setup | `npm start`, then follow the page | `docker compose up -d` | `wrangler deploy` |
 | Claude Desktop, Claude Code, Cursor, Windsurf, Gemini CLI | Yes | Yes | Yes |
 | claude.ai, Claude on iPhone/iPad, ChatGPT (web) | No | Yes | Yes |
 | Works with your computer off | No | Yes, if the server is on | Yes |
@@ -32,15 +32,18 @@ Needs [Node.js](https://nodejs.org) 22.13 or newer.
 
 ```sh
 git clone https://github.com/akseldan/legendary-memory && cd legendary-memory/hub
-npm install && npm run build:local
-node dist/legendary-memory.mjs setup --dry-run   # shows what it would change
-node dist/legendary-memory.mjs setup             # connects the AI apps it finds
+npm install && npm start
 ```
 
-`setup` adds Legendary Memory to Claude Desktop, Claude Code, Cursor, Windsurf and Gemini
-CLI if they are installed. It keeps everything else in their settings, saves a copy of each
-file before changing it, and `setup --undo` takes it out again. Restart the app, then say
-"save a checkpoint for this project" in one and "recall the ... project" in another.
+That opens a welcome page in your browser. It finds the AI apps on this computer (Claude
+Desktop, Claude Code, Cursor, Windsurf, Gemini CLI), connects the ones you pick, waits with
+you for your first saved checkpoint, and afterwards shows what is in your memory. The page
+is served by the program on your own computer and only opens with the one-time key in the
+address it prints; it loads nothing from the internet.
+
+Connecting keeps everything else in each app's settings and saves a copy of the file first.
+Prefer the terminal? `node dist/legendary-memory.mjs setup --dry-run` shows what would
+change, `setup` does it, and `setup --undo` takes it out again.
 
 Claude Desktop only: `npm run pack:mcpb` builds `dist/legendary-memory.mcpb`, which installs
 with a double-click.

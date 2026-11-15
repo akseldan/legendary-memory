@@ -10,6 +10,7 @@ import { handleApi } from '../core/api';
 import { SCOPE_READ, SCOPE_WRITE } from '../core/constants';
 import type { Db } from '../core/db';
 import { handleMcpRequest } from '../core/mcp';
+import { type UiOptions, handleUi } from './ui';
 
 const MAX_BODY = 2_000_000;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -31,7 +32,7 @@ function bearerOk(header: string | undefined, key: string): boolean {
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
-export function startServer(db: Db, key: string, port: number): Promise<Server> {
+export function startServer(db: Db, key: string, port: number, ui?: UiOptions): Promise<Server> {
   const server = createServer(async (req, res) => {
     const send = (status: number, body: string, headers: Record<string, string> = {}) => {
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...headers });
@@ -43,11 +44,12 @@ export function startServer(db: Db, key: string, port: number): Promise<Server> 
       if (!LOCAL_HOSTS.has(host)) return send(403, 'Forbidden');
 
       const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
-      if (url.pathname === '/') return send(200, 'Legendary Memory (local). Connect to /mcp with your key.\n');
+      const ours = ui && (url.pathname === '/' || url.pathname.startsWith('/ui/'));
+      if (url.pathname === '/' && !ours) return send(200, 'Legendary Memory (local). Connect to /mcp with your key.\n');
       if (url.pathname === '/api/health') {
         return send(200, JSON.stringify({ ok: true }), { 'Content-Type': 'application/json' });
       }
-      if (!url.pathname.startsWith('/api/') && url.pathname !== '/mcp') return send(404, 'Not found');
+      if (!ours && !url.pathname.startsWith('/api/') && url.pathname !== '/mcp') return send(404, 'Not found');
 
       const body = req.method === 'GET' || req.method === 'HEAD' ? null : await readBody(req);
       if (body === null && req.method === 'POST') return send(413, 'Body too large');
@@ -60,7 +62,9 @@ export function startServer(db: Db, key: string, port: number): Promise<Server> 
       const request = new Request(url, { method: req.method, headers, body: body ? new Uint8Array(body) : undefined });
 
       let response: Response;
-      if (url.pathname === '/mcp') {
+      if (ours) {
+        response = (await handleUi(request, db, ui)) ?? new Response('Not found', { status: 404 });
+      } else if (url.pathname === '/mcp') {
         if (!bearerOk(req.headers.authorization, key)) {
           return send(401, 'Missing or wrong key', { 'WWW-Authenticate': 'Bearer' });
         }

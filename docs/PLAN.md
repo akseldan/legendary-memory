@@ -82,11 +82,12 @@ Do not charge anyone until all of these are true:
 | 10 | **Skill** (`skills/legendary-memory/SKILL.md`) | **Written. Not yet loaded in an agent.** |
 | 11 | Publish: npm, GitHub release, directories | Not started. Needs the owner's npm account. |
 | 12 | Copy a memory between homes (local, own server, cloud) | Not started |
-| 13 | Dashboard to view, edit and delete memories | Not started |
+| 13 | **Welcome page and "your memory" view** (`legendary-memory start`) | **Done 2026-11-15: guided setup in the browser, live wait for the first checkpoint, read-only list of projects. 17 endpoint checks plus a full click-through in a headless browser. Not yet opened on a real Mac. Editing and deleting from the page: not started.** |
 | 14 | Hosted service | Design sketch only (below) |
 
 Every suite passes as of 2026-11-15, from `hub/`: `npm run test:all` (types, 31 unit, local
-26, host 13 including the shared 40, setup 18); importer 11 and mirror 6 from the repo root.
+26, host 13 including the shared 40, setup 18, welcome page 17); importer 11 and mirror 6
+from the repo root.
 The Cloudflare e2e (`npm run e2e` against `wrangler dev`) was rerun too: 40 of 40. The only
 change to Cloudflare code is one optional setting (`DISABLE_CIMD`), unset there.
 
@@ -95,8 +96,8 @@ change to Cloudflare code is one optional setting (`DISABLE_CIMD`), unset there.
 **A. Try the new pieces for real (owner at the Mac, about an hour).**
 Things only a real app can prove, cheapest first:
 
-1. `cd hub && npm install && npm run build:local && node dist/legendary-memory.mjs setup --dry-run`,
-   then without `--dry-run`. Check Claude Desktop and Claude Code list the tools. Note: this
+1. `cd hub && npm install && npm start`. The welcome page should open in the browser; go
+   through it. Check Claude Desktop and Claude Code list the tools afterwards. Note: this
    local memory is a *separate, empty* memory from the owner's Cloudflare hub. Use it to
    test the install, then `setup --undo`, or the two will be confused with each other.
 2. `npm run pack:mcpb`, double-click `dist/legendary-memory.mcpb`. Unknown: whether the
@@ -123,12 +124,32 @@ Cloudflare memories.
 **D. Automatic capture (phase 5, browser extension).** Unchanged from before. Matters more
 if phase 3 shows ChatGPT Plus cannot save: then the extension is how ChatGPT work gets in.
 
-**E. Dashboard (phase 13).** A page served by `serve` and `host` to read, edit and delete
-what is stored. People will not trust, or pay for, a memory they cannot see.
+**E. Finish the memory view (phase 13).** The page from `start` shows what is stored. Still
+to add: edit a brief, delete an item, search, and the same view on `host`. People will not
+trust, or pay for, a memory they cannot see and correct.
 
 **F. Hosted beta (phase 14).** Only after A to C. Free, invite-only, ten users.
 
 **G. Charge.** Only after the checklist under "What is sold".
+
+## The app question (decided 2026-11-15)
+
+The onboarding is a web page the program serves on the user's own computer, not a native
+app. Reasons: it costs nothing, it is one HTML file with no dependencies and no network
+requests, it works the same on Mac, Windows and Linux, and it cannot trip the "unidentified
+developer" warning that an unsigned Mac app gets. Design: `hub/src/local/ui/welcome.html`
+(a thread from each app to "your memory"; a bead travels down it when a checkpoint lands).
+Opened outside the program it runs on made-up data, which is how the preview is shared.
+
+Later, in this order and only when users justify it:
+
+1. A free public landing page (GitHub Pages) with the preview and the install line.
+2. A real app wrapper (Tauri is the light option) around the same page, so there is an icon
+   to double-click and no terminal. Signing it for macOS needs an Apple Developer
+   membership ($99 a year); that is the first thing worth spending user money on.
+
+Spending rule from the owner: nothing paid until a few people are really using it. Today's
+total cost is zero: GitHub, npm, and Cloudflare's free plan.
 
 ## Hosted service: design sketch
 
@@ -219,6 +240,13 @@ Differences in `host`, on purpose:
 - The address used for the wrong-passphrase limit is the connection's own address, or the
   last `X-Forwarded-For` entry with `--behind-proxy`. A caller cannot choose it.
 - It will not start without a 12+ character passphrase, or with a public `http://` address.
+
+`start` (`src/local/ui.ts`, `src/local/ui/welcome.html`): the local server plus the welcome
+page at `/` and four endpoints under `/ui/` (apps, connect, disconnect, memory). The page
+itself holds no data. `/ui/*` needs a key made fresh on every `start` and passed to the
+browser in the address fragment (stripped on load, kept for the tab); the importer key does
+not open it, and requests carrying another site's `Origin` are refused. The page's content
+policy forbids loading anything from elsewhere.
 
 `setup` (`src/local/setup.ts`): copies the bundle to `~/.legendary-memory/bin/` and adds a
 `legendary-memory` entry to the config of each installed app (Claude Desktop, Cursor,

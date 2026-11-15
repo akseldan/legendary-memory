@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Legendary Memory</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #eef0fa; --card: #ffffff; --ink: #1a1b3a; --soft: #595b80; --line: #d3d6ec;
+    --thread: #f0a202; --ok: #178a63; --warn: #a4510a;
+    --bead-1: #f0a202; --bead-2: #f2637e; --bead-3: #3ba7f5; --bead-4: #2dbe8d; --bead-5: #8b6cf6;
+    --display: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Segoe UI", system-ui, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #131429; --card: #1c1e3c; --ink: #f2f2fb; --soft: #a6a8cb; --line: #2e3058; --ok: #4fd3a4; --warn: #f3b266; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 1.0625rem/1.55 var(--body); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  a { color: inherit; text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--bead-3); outline-offset: 3px; border-radius: 6px; }
+  [hidden] { display: none !important; }
+
+  .frame { min-height: 100%; display: grid; grid-template-rows: auto 1fr auto; max-width: 1180px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 48px); }
+  .top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; padding: 22px 0 10px; }
+  .mark, .quiet { white-space: nowrap; }
+  .mark { display: flex; align-items: center; gap: 10px; font: 700 1rem/1 var(--display); letter-spacing: -0.01em; }
+  .mark svg { width: 26px; height: 26px; }
+  .quiet { background: none; border: 0; padding: 6px 2px; color: var(--soft); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 0.9375rem; }
+  .demo-note { margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--soft); font-size: 0.875rem; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 34rem) minmax(0, 1fr); gap: clamp(24px, 5vw, 72px); align-items: center; padding: 12px 0 28px; }
+  .loom { width: 100%; height: auto; max-height: 68vh; display: block; }
+  .loom text { font: 600 16px var(--body); fill: var(--ink); }
+  .loom text.dim { fill: var(--soft); font-weight: 500; }
+  .loom .knot-label { font: 700 15px var(--display); }
+  .thread { fill: none; stroke: var(--thread); stroke-width: 3.5; stroke-linecap: round; }
+  .thread.pending { stroke: var(--line); stroke-width: 2.5; stroke-dasharray: 2 9; }
+  .thread.draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw 900ms cubic-bezier(.6,.1,.2,1) forwards; animation-delay: var(--delay, 0ms); }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .knot-ring { fill: none; stroke: var(--thread); stroke-width: 3.5; }
+  .knot-core { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  .knot-pulse { fill: none; stroke: var(--thread); stroke-width: 3; opacity: 0; }
+  .knot-pulse.go { animation: pulse 900ms ease-out; }
+  @keyframes pulse { from { opacity: .7; transform: scale(1); } to { opacity: 0; transform: scale(1.9); } }
+  .peg { stroke: var(--paper); stroke-width: 3; }
+  .peg.off { fill: var(--line) !important; }
+
+  .step h1 { font: 800 clamp(2.15rem, 5.2vw, 3.75rem)/1.03 var(--display); letter-spacing: -0.028em; margin: 0 0 18px; text-wrap: balance; }
+  .step h1:focus { outline: none; }
+  .step p { margin: 0 0 16px; max-width: 33rem; }
+  .step p.soft, .soft { color: var(--soft); }
+  .step.enter { animation: enter 260ms ease-out; }
+  @keyframes enter { from { opacity: 0; transform: translateY(8px); } }
+  .actions { display: flex; align-items: center; gap: 18px; margin-top: 26px; flex-wrap: wrap; }
+  .go { background: var(--ink); color: var(--paper); border: 0; border-radius: 999px; padding: 14px 26px; font: 700 1.0625rem/1 var(--display); cursor: pointer; transition: transform 120ms ease; }
+  .go:hover { transform: translateY(-1px); }
+  .go:active { transform: translateY(1px); }
+  .go[disabled] { opacity: .45; cursor: default; transform: none; }
+
+  .said { margin: 0 0 12px; padding: 14px 18px; border-radius: 18px 18px 18px 6px; background: var(--card); border: 1px solid var(--line); max-width: 30rem; }
+  .said.reply { border-radius: 18px 18px 6px 18px; margin-left: clamp(16px, 6vw, 56px); border-color: transparent; box-shadow: inset 0 0 0 2px var(--thread); }
+  .said small { display: block; color: var(--soft); font-size: 0.8125rem; margin-bottom: 2px; }
+
+  .apps { list-style: none; margin: 20px 0 0; padding: 0; border-top: 1px solid var(--line); }
+  .apps li { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 13px 2px; border-bottom: 1px solid var(--line); }
+  .apps input { width: 20px; height: 20px; accent-color: var(--ink); margin: 0; }
+  .apps .dot { width: 20px; height: 20px; border-radius: 50%; }
+  .apps .name { font-weight: 650; }
+  #connect-after { margin-top: 16px; }
+  .apps .why { grid-column: 2 / -1; color: var(--warn); font-size: 0.9rem; margin-top: -6px; overflow-wrap: anywhere; }
+  .state { font-size: 0.9375rem; color: var(--soft); white-space: nowrap; }
+  .state.ok { color: var(--ok); font-weight: 650; }
+  .state.bad { color: var(--warn); font-weight: 650; }
+
+  .copy { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; margin: 0 0 14px; padding: 14px 14px 14px 18px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; max-width: 33rem; }
+  .copy span { overflow-wrap: anywhere; }
+  .copy button { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-size: 0.875rem; font-weight: 650; cursor: pointer; min-width: 4.6rem; }
+  .listen { display: flex; align-items: center; gap: 12px; margin: 18px 0; font-weight: 650; }
+  .listen i { width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--thread); flex: none; }
+  .listen.waiting i { animation: wait 1.4s ease-in-out infinite; }
+  .listen.heard i { background: var(--thread); }
+  .listen.heard { color: var(--ok); }
+  @keyframes wait { 50% { transform: scale(.6); opacity: .5; } }
+
+  .homes { list-style: none; margin: 20px 0 0; padding: 0; border-top: 1px solid var(--line); }
+  .homes li { padding: 14px 2px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; }
+  .homes b { font-weight: 650; }
+  .homes span { grid-column: 1; color: var(--soft); font-size: 0.9375rem; }
+
+  .memory { grid-column: 1 / -1; align-self: start; padding-top: 8px; }
+  .memory h1 { font: 800 clamp(2rem, 4.4vw, 3rem)/1.05 var(--display); letter-spacing: -0.025em; margin: 0 0 8px; }
+  .memory h1:focus { outline: none; }
+  .counts { color: var(--soft); margin: 0 0 22px; }
+  .projects { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .projects > li { padding: 22px 2px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); gap: 10px 40px; }
+  .projects h2 { font: 750 1.375rem/1.2 var(--display); letter-spacing: -0.015em; margin: 0 0 4px; }
+  .projects .brief { margin: 0; white-space: pre-line; max-width: 38rem; }
+  .sessions { list-style: none; padding: 0; margin: 12px 0 0; font-size: 0.9375rem; color: var(--soft); }
+  .sessions li { padding: 3px 0 3px 18px; position: relative; }
+  .sessions li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 9px; height: 9px; border-radius: 50%; background: var(--thread); }
+  .empty { padding: 28px 0; max-width: 33rem; }
+
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0 22px; color: var(--soft); font-size: 0.875rem; flex-wrap: wrap; }
+  .beads { display: flex; align-items: center; gap: 0; margin: 0; padding: 0; list-style: none; }
+  .beads li { display: flex; align-items: center; }
+  .beads li::before { content: ""; width: 22px; height: 3px; background: var(--line); }
+  .beads li:first-child::before { display: none; }
+  .beads li.done::before, .beads li.now::before { background: var(--thread); }
+  .beads i { width: 12px; height: 12px; border-radius: 50%; background: var(--line); display: block; transition: transform 200ms ease; }
+  .beads li.done i { background: var(--thread); }
+  .beads li.now i { background: var(--thread); transform: scale(1.45); }
+  .where { overflow-wrap: anywhere; }
+
+  @media (max-width: 860px) {
+    .stage { grid-template-columns: 1fr; align-items: start; gap: 8px; }
+    .loom-wrap { order: -1; }
+    .loom { max-height: 30vh; }
+    .projects > li { grid-template-columns: 1fr; }
+    .top { padding-top: 16px; }
+    .demo-note { order: 3; flex-basis: 100%; border-radius: 14px; text-align: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .thread.draw { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header class="top">
+    <div class="mark">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><path d="M3 19c5 0 4-12 10-12s5 12 10 12" fill="none" stroke="var(--thread)" stroke-width="3.2" stroke-linecap="round"/><circle cx="13" cy="7" r="3.4" fill="var(--ink)"/></svg>
+      Legendary Memory
+    </div>
+    <p class="demo-note" id="demo-note" hidden>Preview with made-up data. Nothing here touches your computer.</p>
+    <button class="quiet" id="jump" type="button">Skip to my memory</button>
+  </header>
+
+  <main class="stage" id="stage">
+    <div id="steps">
+      <section class="step" data-step="welcome">
+        <h1 tabindex="-1">One memory for every AI you use.</h1>
+        <p>Start a project in one assistant and pick it up in another. No re‑explaining, no copy and paste.</p>
+        <p class="soft">Everything is kept in one file on this computer. No account, nothing sent anywhere.</p>
+        <div class="actions"><button class="go" data-next type="button">Set it up</button><span class="soft">About two minutes</span></div>
+      </section>
+
+      <section class="step" data-step="how" hidden>
+        <h1 tabindex="-1">Save in one app. Recall in any other.</h1>
+        <p>When you finish working, your assistant writes down where the project stands: what was done, what was decided, what comes next. Any connected app can pick it up from there.</p>
+        <div class="said"><small>You, in one app</small>Save a checkpoint for the cooling project.</div>
+        <div class="said"><small>You, days later, in another</small>Recall the cooling project.</div>
+        <div class="said reply"><small>Its answer</small>Cooling System. Last session you settled on a thermistor-driven fan curve. Next up: test it under load.</div>
+        <div class="actions"><button class="go" data-next type="button">Continue</button><button class="quiet" data-back type="button">Back</button></div>
+      </section>
+
+      <section class="step" data-step="connect" hidden>
+        <h1 tabindex="-1">Connect your apps</h1>
+        <p id="connect-lede">Looking for AI apps on this computer…</p>
+        <ul class="apps" id="apps" aria-live="polite"></ul>
+        <p class="soft" id="connect-after" hidden>Quit and reopen each app you just connected so it loads the memory.</p>
+        <div class="actions">
+          <button class="go" id="connect-go" type="button" disabled>Connect</button>
+          <button class="quiet" id="connect-recheck" type="button">Check again</button>
+          <button class="quiet" data-back type="button">Back</button>
+        </div>
+      </section>
+
+      <section class="step" data-step="try" hidden>
+        <h1 tabindex="-1">Save your first checkpoint</h1>
+        <p>Open a connected app and paste this. It can be about anything you are working on.</p>
+        <div class="copy"><span id="say-save">Save a checkpoint to Legendary Memory for this project: we are testing the setup, and the next step is to recall it from another app.</span><button type="button" data-copy="say-save">Copy</button></div>
+        <p class="listen waiting" id="listen" aria-live="polite"><i></i><span>Listening for it…</span></p>
+        <div id="recall-part" hidden>
+          <p>Now open a different app, or a new chat, and paste:</p>
+          <div class="copy"><span id="say-recall">Recall the project from Legendary Memory.</span><button type="button" data-copy="say-recall">Copy</button></div>
+        </div>
+        <div class="actions"><button class="go" id="try-go" data-next type="button">Skip for now</button><button class="quiet" data-back type="button">Back</button></div>
+      </section>
+
+      <section class="step" data-step="habit" hidden>
+        <h1 tabindex="-1">Let them use it without being asked</h1>
+        <p>Paste this line into each app's custom instructions. Without it, an assistant may wait until you mention the memory by name.</p>
+        <div class="copy"><span id="say-habit">Use Legendary Memory: recall a project before working on it and save a checkpoint when we finish a session.</span><button type="button" data-copy="say-habit">Copy</button></div>
+        <p class="soft">Look for "custom instructions" or "rules" in each app's settings.</p>
+        <div class="actions"><button class="go" data-next type="button">Continue</button><button class="quiet" data-back type="button">Back</button></div>
+      </section>
+
+      <section class="step" data-step="phone" hidden>
+        <h1 tabindex="-1">Want it on your phone too?</h1>
+        <p>Phone and web apps reach your memory over the internet, so it needs an address they can find. Desktop apps do not, and they are ready now.</p>
+        <ul class="homes">
+          <li><b>This computer</b><span class="state ok">Set up</span><span>Desktop apps, no account.</span></li>
+          <li><b>Your own server</b><a href="https://github.com/akseldan/legendary-memory/blob/main/docs/SELF-HOST.md" target="_blank" rel="noopener">Read the guide</a><span>Adds claude.ai, Claude on your phone and ChatGPT on the web.</span></li>
+          <li><b>Hosted for you</b><span class="state">Not available yet</span><span>Sign in and go, with nothing to run yourself.</span></li>
+        </ul>
+        <div class="actions"><button class="go" data-next type="button">Finish</button><button class="quiet" data-back type="button">Back</button></div>
+      </section>
+
+      <section class="step" data-step="locked" hidden>
+        <h1 tabindex="-1">Open this from the terminal</h1>
+        <p>This page shows your memory, so it only opens with a key. Run this and it will open here with access:</p>
+        <div class="copy"><span id="say-start">legendary-memory start</span><button type="button" data-copy="say-start">Copy</button></div>
+      </section>
+    </div>
+
+    <div class="loom-wrap" id="loom-wrap"><svg class="loom" id="loom" role="img" aria-label="Your apps, joined to your memory by a thread"></svg></div>
+
+    <section class="memory" id="memory" hidden>
+      <h1 tabindex="-1">Your memory</h1>
+      <p class="counts" id="counts"></p>
+      <ul class="projects" id="projects"></ul>
+      <div class="empty" id="empty" hidden>
+        <p><b>Nothing saved yet.</b></p>
+        <p class="soft">Ask a connected app to "save a checkpoint for this project" and it will appear here.</p>
+      </div>
+      <div class="actions"><button class="quiet" id="again" type="button">Run setup again</button></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <ol class="beads" id="beads" aria-label="Setup progress"></ol>
+    <span class="where" id="where"></span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const SVG = 'http://www.w3.org/2000/svg';
+  const svg = (tag, attrs = {}, text) => {
+    const node = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const el = (tag, props = {}, kids = []) => {
+    const node = Object.assign(document.createElement(tag), props);
+    for (const kid of kids) node.append(kid);
+    return node;
+  };
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const BEADS = ['--bead-1', '--bead-2', '--bead-3', '--bead-4', '--bead-5'];
+
+  // ---- where the data comes from: the local hub, or made-up data when this is only a preview
+  const local = /^https?:$/.test(location.protocol) && ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+  let token = '';
+  if (local) {
+    const fromHash = new URLSearchParams(location.hash.slice(1)).get('t');
+    try {
+      if (fromHash) sessionStorage.setItem('lm-token', fromHash);
+      token = fromHash || sessionStorage.getItem('lm-token') || '';
+    } catch { token = fromHash || ''; }
+    if (fromHash) history.replaceState(null, '', location.pathname);
+  }
+  const demo = !local;
+
+  const fake = {
+    apps: [
+      { app: 'Claude Desktop', status: 'found' }, { app: 'Claude Code', status: 'found' }, { app: 'Cursor', status: 'found' },
+      { app: 'Windsurf', status: 'missing' }, { app: 'Gemini CLI', status: 'missing' },
+    ],
+    memory: { dataFile: '~/.legendary-memory/memory.db', counts: { projects: 0, sessions: 0, files: 0, facts: 0 }, latest: null, projects: [] },
+    arrive() {
+      const at = new Date().toISOString();
+      this.memory.latest = { id: 'demo', title: 'Tested the setup', project: 'Setup Test', source: 'claude', at };
+      this.memory.counts = { projects: 2, sessions: 3, files: 1, facts: 2 };
+      this.memory.projects = [
+        { name: 'Setup Test', status: 'active', updated_at: at, files: 0, brief: 'Goal: confirm Legendary Memory works across apps.\nState: first checkpoint saved from Claude Desktop.\nNext: recall it from another app.', sessions: [{ title: 'Tested the setup', source: 'claude', created_at: at }] },
+        { name: 'Cooling System', status: 'active', updated_at: at, files: 1, brief: 'Goal: a quiet cooling loop for the workshop PC.\nState: thermistor-driven fan curve chosen over fixed speeds.\nNext: test under load and log temperatures.', sessions: [{ title: 'Chose the fan curve', source: 'chatgpt', created_at: at }, { title: 'Compared pump options', source: 'claude', created_at: at }] },
+      ];
+    },
+  };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function api(path, body) {
+    if (demo) {
+      await wait(body ? 700 : 150);
+      if (path === '/ui/apps') return { apps: fake.apps };
+      if (path === '/ui/connect') { for (const a of fake.apps) if (body.only.includes(a.app)) a.status = 'connected'; return { apps: fake.apps }; }
+      return fake.memory;
+    }
+    const res = await fetch(path, {
+      method: body ? 'POST' : 'GET',
+      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) throw new Error('locked');
+    if (!res.ok) throw new Error(`The local program answered ${res.status}.`);
+    return res.json();
+  }
+
+  // ---- the loom: your memory in the middle, one peg per app, a thread to each connected app
+  let apps = [];
+  let beadsHeld = 0;
+  let current = 'welcome';
+  let drawStarted = 0;
+  const narrow = matchMedia('(max-width: 860px)');
+  function geometry() {
+    return narrow.matches
+      ? { w: 360, h: 230, knot: [64, 115], pegX: 196, top: 30, gap: 42, r: 26 }
+      : { w: 470, h: 500, knot: [112, 250], pegX: 292, top: 78, gap: 86, r: 48 };
+  }
+  const threadPath = (g, y) => `M${g.knot[0] + g.r},${g.knot[1]} C${g.knot[0] + g.r + 60},${g.knot[1]} ${g.pegX - 70},${y} ${g.pegX},${y}`;
+  /** Pass true to draw the threads on, once; later redraws inside that moment carry on from where it is. */
+  function drawLoom(animate = false) {
+    if (animate && !still) drawStarted = performance.now();
+    const elapsed = performance.now() - drawStarted;
+    const drawing = drawStarted > 0 && elapsed < 1800;
+    // The first two screens show what a connected setup looks like; after that it is the real state.
+    const picture = current === 'welcome' || current === 'how';
+    const g = geometry();
+    const loom = $('loom');
+    loom.replaceChildren();
+    loom.setAttribute('viewBox', `0 0 ${g.w} ${g.h}`);
+    const shown = apps.length ? apps : fake.apps.map((a) => ({ ...a, status: 'found' }));
+    shown.forEach((a, i) => {
+      const y = g.top + i * g.gap;
+      const there = a.status !== 'missing';
+      const on = picture ? there : a.status === 'connected';
+      if (there) {
+        const path = svg('path', { d: threadPath(g, y), class: `thread${on ? '' : ' pending'}`, 'data-app': a.app });
+        loom.append(path);
+        if (on && drawing) {
+          path.style.setProperty('--len', path.getTotalLength());
+          path.style.setProperty('--delay', `${i * 140 - elapsed}ms`);
+          path.classList.add('draw');
+        }
+      }
+      loom.append(svg('circle', { cx: g.pegX, cy: y, r: 10, class: `peg${there ? '' : ' off'}`, style: `fill: var(${BEADS[i % BEADS.length]})` }));
+      loom.append(svg('text', { x: g.pegX + 20, y: y + 5, class: there ? '' : 'dim' }, a.app));
+    });
+    const [kx, ky] = g.knot;
+    loom.append(svg('circle', { cx: kx, cy: ky, r: g.r, class: 'knot-pulse', id: 'pulse', style: `transform-origin: ${kx}px ${ky}px` }));
+    loom.append(svg('circle', { cx: kx, cy: ky, r: g.r, class: 'knot-core' }));
+    loom.append(svg('circle', { cx: kx, cy: ky, r: g.r, class: 'knot-ring' }));
+    // On the first two screens the picture holds a few sessions already, to show what it becomes.
+    const held = picture ? Math.max(beadsHeld, 3) : beadsHeld;
+    for (let i = 0; i < Math.min(held, 8); i++) {
+      const angle = -Math.PI / 2 + (i * Math.PI) / 4;
+      loom.append(svg('circle', { cx: kx + Math.cos(angle) * (g.r * 0.52), cy: ky + Math.sin(angle) * (g.r * 0.52), r: g.r > 40 ? 5.5 : 4, fill: 'var(--thread)' }));
+    }
+    loom.append(svg('text', { x: kx, y: ky + g.r + 24, 'text-anchor': 'middle', class: 'knot-label' }, 'Your memory'));
+  }
+  narrow.addEventListener('change', () => drawLoom());
+
+  /** A bead travels down the thread from the app that saved to your memory. */
+  function beadArrives(sourceLabel) {
+    const paths = [...document.querySelectorAll('#loom .thread:not(.pending)')];
+    const path = paths.find((p) => p.dataset.app.toLowerCase().includes(sourceLabel)) || paths[0];
+    const land = () => { beadsHeld++; drawLoom(); const pulse = $('pulse'); if (pulse && !still) pulse.classList.add('go'); };
+    if (!path || still) return land();
+    const bead = svg('circle', { r: 7, fill: 'var(--thread)' });
+    $('loom').append(bead);
+    const total = path.getTotalLength();
+    const began = performance.now();
+    const tick = (now) => {
+      const t = Math.min((now - began) / 950, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const at = path.getPointAtLength(total * (1 - eased));
+      bead.setAttribute('cx', at.x);
+      bead.setAttribute('cy', at.y);
+      if (t < 1) requestAnimationFrame(tick); else land();
+    };
+    requestAnimationFrame(tick);
+  }
+
+  // ---- steps
+  const ORDER = ['welcome', 'how', 'connect', 'try', 'habit', 'phone'];
+  const section = (name) => document.querySelector(`[data-step="${name}"]`);
+  function show(name) {
+    current = name;
+    const inMemory = name === 'memory';
+    $('steps').hidden = inMemory;
+    $('loom-wrap').hidden = inMemory || name === 'locked';
+    $('memory').hidden = !inMemory;
+    $('jump').hidden = inMemory || name === 'locked';
+    for (const s of document.querySelectorAll('.step')) s.hidden = s.dataset.step !== name;
+    const target = inMemory ? $('memory') : section(name);
+    if (!inMemory) { target.classList.remove('enter'); void target.offsetWidth; target.classList.add('enter'); }
+    target.querySelector('h1').focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+    const at = ORDER.indexOf(name);
+    $('beads').replaceChildren(...(at < 0 ? [] : ORDER.map((_, i) => el('li', { className: i < at ? 'done' : i === at ? 'now' : '' }, [el('i')]))));
+    if (!inMemory) drawLoom();
+    if (name === 'connect') loadApps();
+    if (name === 'try') startListening(); else stopListening();
+    if (inMemory) { loadMemory(); try { localStorage.setItem('lm-onboarded', '1'); } catch {} }
+  }
+  const step = (by) => {
+    const at = ORDER.indexOf(current) + by;
+    show(at >= ORDER.length ? 'memory' : ORDER[Math.max(at, 0)]);
+  };
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    if (button.hasAttribute('data-next')) step(1);
+    else if (button.hasAttribute('data-back')) step(-1);
+    else if (button.dataset.copy) copy(button);
+  });
+  $('jump').addEventListener('click', () => show('memory'));
+  $('again').addEventListener('click', () => show('welcome'));
+
+  async function copy(button) {
+    const source = $(button.dataset.copy);
+    try {
+      await navigator.clipboard.writeText(source.textContent);
+      button.textContent = 'Copied';
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(source);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      button.textContent = 'Selected';
+    }
+    setTimeout(() => (button.textContent = 'Copy'), 1600);
+  }
+
+  // ---- connect
+  const LABEL = { found: 'Found', connected: 'Connected', missing: 'Not installed', problem: 'Needs a hand' };
+  function renderApps() {
+    const found = apps.filter((a) => a.status === 'found');
+    const connected = apps.filter((a) => a.status === 'connected');
+    $('apps').replaceChildren(...apps.map((a, i) => {
+      const lead = a.status === 'found'
+        ? el('input', { type: 'checkbox', checked: true, id: `app-${i}`, value: a.app })
+        : el('span', { className: 'dot', style: `background: ${a.status === 'connected' ? `var(${BEADS[i % BEADS.length]})` : 'var(--line)'}` });
+      const row = el('li', {}, [
+        lead,
+        el('label', { className: 'name', htmlFor: `app-${i}`, textContent: a.app }),
+        el('span', { className: `state${a.status === 'connected' ? ' ok' : a.status === 'problem' ? ' bad' : ''}`, textContent: LABEL[a.status] }),
+      ]);
+      if (a.status === 'problem' && a.detail) row.append(el('span', { className: 'why', textContent: a.detail }));
+      return row;
+    }));
+    const go = $('connect-go');
+    if (found.length) {
+      $('connect-lede').textContent = 'These AI apps are on this computer. Connecting adds one entry to each app\'s settings and keeps a copy of the settings as they were. You can undo it any time.';
+      go.onclick = connectChosen;
+      syncConnectButton();
+    } else if (connected.length) {
+      $('connect-lede').textContent = connected.length === 1 ? 'Your app is connected.' : `Your ${connected.length} apps are connected.`;
+      go.textContent = 'Continue';
+      go.disabled = false;
+      go.onclick = () => step(1);
+    } else {
+      $('connect-lede').textContent = 'No supported app was found. Install Claude Desktop, Claude Code, Cursor, Windsurf or Gemini CLI, then check again.';
+      go.textContent = 'Continue anyway';
+      go.disabled = false;
+      go.onclick = () => step(1);
+    }
+    drawLoom();
+  }
+  function syncConnectButton() {
+    const chosen = document.querySelectorAll('#apps input:checked').length;
+    const go = $('connect-go');
+    go.disabled = chosen === 0;
+    go.textContent = chosen === 1 ? 'Connect 1 app' : `Connect ${chosen} apps`;
+  }
+  $('apps').addEventListener('change', syncConnectButton);
+  async function loadApps() {
+    try {
+      apps = (await api('/ui/apps')).apps;
+      renderApps();
+    } catch (error) { fail(error); }
+  }
+  async function connectChosen() {
+    const only = [...document.querySelectorAll('#apps input:checked')].map((box) => box.value);
+    const go = $('connect-go');
+    go.disabled = true;
+    go.textContent = 'Connecting…';
+    try {
+      apps = (await api('/ui/connect', { only })).apps;
+      $('connect-after').hidden = !apps.some((a) => a.status === 'connected');
+      renderApps();
+      drawLoom(true);
+    } catch (error) { fail(error); }
+  }
+  $('connect-recheck').addEventListener('click', loadApps);
+
+  // ---- first checkpoint
+  let listening = null;
+  let demoArrival = null;
+  let baseline = null;
+  function startListening() {
+    stopListening();
+    const poll = async () => {
+      try {
+        const memory = await api('/ui/memory');
+        const latest = memory.latest ? memory.latest.id + memory.latest.at : '';
+        if (baseline === null) baseline = latest;
+        else if (latest && latest !== baseline) return heard(memory.latest);
+      } catch (error) { return fail(error); }
+      listening = setTimeout(poll, 2500);
+    };
+    poll();
+    if (demo && !fake.memory.latest) demoArrival = setTimeout(() => fake.arrive(), 3200);
+  }
+  function stopListening() { clearTimeout(listening); clearTimeout(demoArrival); listening = null; }
+  function heard(latest) {
+    stopListening();
+    baseline = latest.id + latest.at;
+    const line = $('listen');
+    line.className = 'listen heard';
+    line.lastElementChild.textContent = `Got it. "${latest.title}" arrived from ${nice(latest.source)}.`;
+    $('say-recall').textContent = `Recall the ${latest.project} project from Legendary Memory.`;
+    $('recall-part').hidden = false;
+    $('try-go').textContent = 'Continue';
+    beadArrives(latest.source);
+  }
+
+  // ---- your memory
+  const KNOWN = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', cursor: 'Cursor', windsurf: 'Windsurf' };
+  const nice = (source) => KNOWN[source] || (source ? source.charAt(0).toUpperCase() + source.slice(1).replace(/-/g, ' ') : 'an assistant');
+  const day = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  async function loadMemory() {
+    try {
+      const memory = await api('/ui/memory');
+      const c = memory.counts;
+      $('counts').textContent = [count(c.projects, 'project', 'projects'), count(c.sessions, 'session', 'sessions'), count(c.files, 'saved file', 'saved files'), count(c.facts, 'fact about you', 'facts about you')].join(', ');
+      $('where').textContent = `Kept in ${memory.dataFile}`;
+      $('empty').hidden = memory.projects.length > 0;
+      $('projects').replaceChildren(...memory.projects.map((p) => el('li', {}, [
+        el('div', {}, [
+          el('h2', { textContent: p.name }),
+          el('span', { className: 'soft', textContent: `${p.status}, updated ${day(p.updated_at)}` }),
+          el('ul', { className: 'sessions' }, p.sessions.map((s) => el('li', { textContent: `${s.title} (${nice(s.source)}, ${day(s.created_at)})` }))),
+        ]),
+        el('p', { className: p.brief ? 'brief' : 'brief soft', textContent: p.brief || 'No brief yet. It is written the next time an assistant saves a checkpoint with one.' }),
+      ])));
+    } catch (error) { fail(error); }
+  }
+
+  function fail(error) {
+    if (error.message === 'locked') return show('locked');
+    $('where').textContent = `Could not reach the local program. Is "legendary-memory start" still running? (${error.message})`;
+  }
+
+  // ---- start
+  $('demo-note').hidden = !demo;
+  if (local && !token) show('locked');
+  else {
+    let returning = false;
+    try { returning = localStorage.getItem('lm-onboarded') === '1'; } catch {}
+    show(returning && !demo ? 'memory' : 'welcome');
+    drawLoom(true);
+    api('/ui/apps').then((result) => { apps = result.apps; drawLoom(); }).catch(() => {});
+    api('/ui/memory').then((memory) => { $('where').textContent = `Kept in ${memory.dataFile}`; beadsHeld = Math.min(memory.counts.sessions, 8); drawLoom(); }).catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

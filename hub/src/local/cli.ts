@@ -3,12 +3,15 @@
  * Legendary Memory on your own machine. No account, no server to rent: your memory is one
  * SQLite file on this computer.
  *
- *   legendary-memory setup        connect the AI apps installed on this computer
+ *   legendary-memory start        open the welcome page: guided setup, then your memory
+ *   legendary-memory setup        the same setup from the terminal, no browser
  *   legendary-memory stdio        MCP over stdin/stdout (what those apps run)
  *   legendary-memory serve        local HTTP on 127.0.0.1 (importer, extension, HTTP clients)
  *   legendary-memory host         reachable from the internet with sign-in (phone, web apps)
  *   legendary-memory info         where things are, plus copy-paste connector settings
  */
+import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SCOPE_READ, SCOPE_WRITE, VERSION } from '../core/constants';
@@ -17,6 +20,7 @@ import { MIN_PASSPHRASE_LENGTH, apiKey, dataDir, dbPath, passphrase, signInDbPat
 import { startServer } from './server';
 import { defaultRunner, formatResults, installBundle, runSetup } from './setup';
 import { loadSqlite, openDatabase } from './sqlite';
+import welcomeHtml from './ui/welcome.html';
 
 // Node 22 labels its built-in SQLite "experimental" on every start. Apps show a server's
 // stderr as errors, so drop that one notice and let every other warning through.
@@ -35,7 +39,8 @@ const has = (name: string): boolean => rest.includes(name);
 
 const USAGE = `Legendary Memory ${VERSION}: one memory shared across your AI assistants.
 
-  legendary-memory setup [--dry-run]   Connect the AI apps on this computer (start here)
+  legendary-memory start               Open the welcome page in your browser (start here)
+  legendary-memory setup [--dry-run]   Connect the AI apps on this computer from the terminal
   legendary-memory setup --undo        Disconnect them again
   legendary-memory info                Show where your data is and settings to paste by hand
   legendary-memory serve [--port N]    Local-only HTTP server for the importer and extension
@@ -43,8 +48,57 @@ const USAGE = `Legendary Memory ${VERSION}: one memory shared across your AI ass
                                        Serve phone and web apps from your own machine
   legendary-memory stdio               Used by the AI apps; you do not run this yourself`;
 
+/** Opens the address in the default browser. Best effort: the address is also printed. */
+function openInBrowser(address: string): void {
+  const [program, args] =
+    process.platform === 'darwin' ? ['open', [address]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', address]] : ['xdg-open', [address]];
+  try {
+    spawn(program, args as string[], { stdio: 'ignore', detached: true }).on('error', () => undefined).unref();
+  } catch {
+    // No browser launcher here (a server, a container): the printed address is enough.
+  }
+}
+
 async function main(): Promise<void> {
   switch (command) {
+    case 'start': {
+      const db = openDatabase(dbPath());
+      const self = process.argv[1] ?? '';
+      const token = randomBytes(24).toString('hex');
+      const ui = {
+        token,
+        html: welcomeHtml,
+        dataFile: dbPath(),
+        setup: (run: { dryRun: boolean; undo: boolean; only?: string[] }) =>
+          runSetup({
+            home: homedir(),
+            platform: process.platform,
+            env: process.env,
+            nodePath: process.execPath,
+            serverPath: installBundle(self, dataDir(), run.dryRun || run.undo),
+            run: defaultRunner,
+            ...run,
+          }),
+      };
+      const first = Number(flag('--port') ?? process.env.PORT ?? 8787);
+      let port = first;
+      for (;;) {
+        try {
+          await startServer(db, apiKey(), port, ui);
+          break;
+        } catch (error) {
+          // Another copy, or another program, already has the port: try the next few.
+          if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE' || port >= first + 10) throw error;
+          port++;
+        }
+      }
+      const address = `http://127.0.0.1:${port}/#t=${token}`;
+      console.error(`Legendary Memory ${VERSION} is open at:\n  ${address}\n`);
+      console.error('Keep this window open while you use the page. Press Ctrl+C to close it.');
+      console.error('Your connected apps keep working after you close it.');
+      if (!has('--no-open')) openInBrowser(address);
+      return;
+    }
     case 'stdio': {
       const db = openDatabase(dbPath());
       const server = buildServer(db, { client: '' }, [SCOPE_READ, SCOPE_WRITE], () => server.server.getClientVersion()?.name ?? '');

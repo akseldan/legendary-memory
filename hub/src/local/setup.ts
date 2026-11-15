@@ -24,6 +24,8 @@ export interface SetupContext {
   dryRun: boolean;
   /** Remove the entry instead of adding it. */
   undo: boolean;
+  /** Limit the run to these apps, by the names used in the results. Everything when unset. */
+  only?: string[];
   /** Runs a command; returns its exit code, or null if the program is not installed. */
   run: (command: string, args: string[]) => { code: number | null; output: string };
 }
@@ -141,7 +143,11 @@ function connectClaudeCode(ctx: SetupContext): SetupResult {
 }
 
 export function runSetup(ctx: SetupContext): SetupResult[] {
-  return [...JSON_APPS.map((app) => connectJsonApp(app, ctx)), connectClaudeCode(ctx)];
+  const chosen = (app: string): boolean => !ctx.only || ctx.only.includes(app);
+  return [
+    ...JSON_APPS.filter((app) => chosen(app.app)).map((app) => connectJsonApp(app, ctx)),
+    ...(chosen('Claude Code') ? [connectClaudeCode(ctx)] : []),
+  ];
 }
 
 /**
