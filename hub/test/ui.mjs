@@ -2,7 +2,7 @@
 // everything behind it needs the one-time key, and connecting through the page does what
 // `setup` does. Builds are done by `npm run test:ui`.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,6 +68,18 @@ try {
   check('the app is pointed at the permanent copy', entry?.args?.[0] === join(home, '.legendary-memory', 'bin', 'legendary-memory.mjs') && existsSync(entry.args[0]), JSON.stringify(entry));
   const undone = await (await ui('/ui/disconnect', { body: { only: ['Cursor'] } })).json();
   check('disconnecting puts it back to found', state(undone, 'Cursor') === 'found', JSON.stringify(undone));
+
+  console.log('\nThe Claude Desktop extension');
+  const desktop = process.platform === 'darwin' ? join(home, 'Library', 'Application Support', 'Claude') : join(home, '.config', 'Claude');
+  const extId = 'local.mcpb.akseldan.legendary-memory';
+  mkdirSync(join(desktop, 'Claude Extensions Settings'), { recursive: true });
+  writeFileSync(join(desktop, 'extensions-installations.json'), JSON.stringify({ extensions: { [extId]: { id: extId, version: '0.9.0', manifest: { name: 'legendary-memory' } } } }));
+  writeFileSync(join(desktop, 'Claude Extensions Settings', `${extId}.json`), JSON.stringify({ isEnabled: true }));
+  const withExtension = await (await ui('/ui/apps')).json();
+  const desktopApp = withExtension.apps.find((a) => a.app === 'Claude Desktop');
+  check('an installed extension shows as connected, with a note saying how', desktopApp?.status === 'connected' && /extension v0\.9\.0/.test(desktopApp?.note ?? ''), JSON.stringify(desktopApp));
+  const viaPage = await (await ui('/ui/connect', { body: { only: ['Claude Desktop'] } })).json();
+  check('connecting through the page adds no second copy', !existsSync(join(desktop, 'claude_desktop_config.json')) && viaPage.apps.find((a) => a.app === 'Claude Desktop')?.status === 'connected', JSON.stringify(viaPage));
 
   console.log('\nMemory');
   const empty = await (await ui('/ui/memory')).json();
