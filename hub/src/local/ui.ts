@@ -23,7 +23,7 @@ export interface UiOptions {
 /** Same ceiling as the save_checkpoint tool's brief. */
 const MAX_BRIEF = 16000;
 
-type AppState = { app: string; status: 'found' | 'connected' | 'missing' | 'problem'; detail?: string };
+type AppState = { app: string; status: 'found' | 'connected' | 'missing' | 'problem'; detail?: string; note?: string };
 
 const PAGE_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
@@ -54,9 +54,11 @@ export const bearerAuthorizer =
 /** What a look (dry run) at the apps says about each one. */
 function appStates(results: SetupResult[]): AppState[] {
   return results.map((r) => {
-    if (r.status === 'already') return { app: r.app, status: 'connected' };
-    if (r.status === 'connected') return { app: r.app, status: 'found' };
+    if (r.status === 'already') return { app: r.app, status: 'connected', ...(r.note ? { note: r.note } : {}) };
+    if (r.status === 'connected') return { app: r.app, status: 'found', ...(r.note ? { note: r.note } : {}) };
     if (r.status === 'failed') return { app: r.app, status: 'problem', detail: r.detail };
+    // Skipped (for example an extension that is switched off) is still an app that is there.
+    if (r.status === 'skipped' && r.note) return { app: r.app, status: 'found', note: r.note };
     return { app: r.app, status: 'missing' };
   });
 }

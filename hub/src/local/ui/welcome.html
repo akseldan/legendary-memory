@@ -571,6 +571,7 @@
         el('span', { className: `state${a.status === 'connected' ? ' ok' : a.status === 'problem' ? ' bad' : ''}`, textContent: LABEL[a.status] }),
       ]);
       if (a.status === 'problem' && a.detail) row.append(el('span', { className: 'why', textContent: a.detail }));
+      else if (a.note) row.append(el('span', { className: 'why', textContent: a.note }));
       return row;
     }));
     const go = $('connect-go');

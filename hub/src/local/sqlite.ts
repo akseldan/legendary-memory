@@ -6,6 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
+import { VERSION } from '../core/constants';
 import type { Db, Statement } from '../core/db';
 import { MIGRATIONS } from './migrations';
 
@@ -75,17 +76,36 @@ class LocalDb implements Db {
 export function openDatabase(file: string): Db {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
   const db = new (loadSqlite().DatabaseSync)(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-  const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-  for (const [index, sql] of MIGRATIONS.entries()) {
-    if (index < row.user_version) continue;
-    db.exec('BEGIN');
+  // Waiting for another program's lock has to be set before anything that needs one.
+  db.exec('PRAGMA busy_timeout = 5000;');
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  const version = (): number => (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+  const refuseNewer = (found: number): never => {
+    db.close();
+    throw new Error(
+      `This memory was last used by a newer Legendary Memory (its data format is ${found}; this copy, ${VERSION}, understands up to ${MIGRATIONS.length}). ` +
+        'Nothing was changed. Update this copy: reinstall the latest extension in Claude Desktop, or download the latest release.',
+    );
+  };
+  if (version() > MIGRATIONS.length) refuseNewer(version());
+  if (version() < MIGRATIONS.length) {
+    // Two apps starting at once on a new machine both see an empty database. The first takes
+    // the write lock; the second waits, then sees the first's work and has nothing to do.
+    db.exec('BEGIN IMMEDIATE');
     try {
-      db.exec(sql);
-      db.exec(`PRAGMA user_version = ${index + 1}`);
+      const have = version();
+      if (have > MIGRATIONS.length) {
+        db.exec('ROLLBACK');
+        refuseNewer(have);
+      }
+      for (const [index, sql] of MIGRATIONS.entries()) {
+        if (index < have) continue;
+        db.exec(sql);
+        db.exec(`PRAGMA user_version = ${index + 1}`);
+      }
       db.exec('COMMIT');
     } catch (error) {
-      db.exec('ROLLBACK');
+      if (db.isTransaction) db.exec('ROLLBACK');
       throw error;
     }
   }

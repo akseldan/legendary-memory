@@ -2,7 +2,7 @@
 // apps, keep everything else in their config files, back files up, and never touch what it
 // cannot parse. Builds are done by `npm run test:setup`.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -102,7 +102,7 @@ try {
     const out = run([]);
     const desktop = json(desktopFile);
     const entry = desktop.mcpServers?.['legendary-memory'];
-    check('Claude Desktop gets the entry', entry?.args?.[0] === server && entry?.args?.[1] === 'stdio' && entry?.command === process.execPath, JSON.stringify(desktop));
+    check('Claude Desktop gets the entry', entry?.args?.[0] === server && entry?.args?.[1] === 'stdio' && realpathSync(entry?.command ?? '/nonexistent') === realpathSync(process.execPath), JSON.stringify(desktop));
     check('other servers and settings are kept', desktop.theme === 'dark' && desktop.mcpServers?.other?.command === 'npx', JSON.stringify(desktop));
     check('the previous file is backed up', json(`${desktopFile}.before-legendary-memory`).mcpServers['legendary-memory'] === undefined);
     check('Cursor config is created', json(cursorFile).mcpServers?.['legendary-memory']?.args?.[0] === server);
@@ -137,6 +137,91 @@ try {
     check('Claude Code entry is removed', !existsSync(claudeState) && /Claude Code\s+disconnected/.test(out.stdout), out.stdout);
     check('Codex entry is removed', !existsSync(`${claudeState}.codex`) && /Codex\s+disconnected/.test(out.stdout), out.stdout);
     check('your memory is not deleted', existsSync(join(data, 'memory.db')));
+  }
+
+  console.log('\nThe Claude Desktop extension');
+  {
+    const ours = 'local.mcpb.akseldan.legendary-memory';
+    const listFile = join(desktopDir, 'extensions-installations.json');
+    const switchFile = join(desktopDir, 'Claude Extensions Settings', `${ours}.json`);
+    const folder = join(desktopDir, 'Claude Extensions', ours);
+    const install = (enabled) => {
+      mkdirSync(folder, { recursive: true });
+      mkdirSync(join(desktopDir, 'Claude Extensions Settings'), { recursive: true });
+      writeFileSync(join(folder, 'manifest.json'), JSON.stringify({ name: 'legendary-memory', version: '0.9.0' }));
+      writeFileSync(listFile, JSON.stringify({ extensions: { [ours]: { id: ours, version: '0.9.0', manifest: { name: 'legendary-memory' } } } }));
+      writeFileSync(switchFile, JSON.stringify({ isEnabled: enabled }));
+    };
+    const snapshot = () => [listFile, switchFile, join(folder, 'manifest.json')].map((p) => readFileSync(p, 'utf8')).join('|');
+    const entryOf = () => json(desktopFile).mcpServers?.['legendary-memory'];
+    const setConfig = (servers) => writeFileSync(desktopFile, JSON.stringify({ theme: 'dark', mcpServers: servers }, null, 2));
+
+    setConfig({ other: { command: 'npx', args: ['-y', 'other-server'] } });
+    install(true);
+    let out = run([]);
+    check('an enabled extension is used and no second entry is added', entryOf() === undefined && /Claude Desktop\s+already connected/.test(out.stdout) && /extension v0\.9\.0/.test(out.stdout), out.stdout);
+
+    setConfig({ other: { command: 'npx' }, 'legendary-memory': { command: '/x/node', args: ['/x/server.mjs', 'stdio'] } });
+    out = run(['--dry-run']);
+    check('a dry run says it would remove the duplicate and removes nothing', /would remove the duplicate/.test(out.stdout) && entryOf() !== undefined, out.stdout);
+    out = run([]);
+    check('a duplicate entry is removed when the extension is on', entryOf() === undefined && json(desktopFile).mcpServers.other?.command === 'npx' && json(desktopFile).theme === 'dark', out.stdout);
+
+    const extensionBefore = snapshot();
+    setConfig({ 'legendary-memory': { command: '/x/node', args: ['/x/server.mjs', 'stdio'] } });
+    out = run(['--undo']);
+    check('undo removes only the entry and says the extension stays', entryOf() === undefined && /extension is still installed/.test(out.stdout) && snapshot() === extensionBefore, out.stdout);
+
+    setConfig({});
+    out = run(['--undo']);
+    check('undo with only the extension changes nothing and says how to remove it', /Settings > Extensions/.test(out.stdout) && snapshot() === extensionBefore, out.stdout);
+
+    install(false);
+    setConfig({});
+    out = run([]);
+    check('a switched-off extension is not worked around with a second copy', entryOf() === undefined && /switched off/.test(out.stdout), out.stdout);
+
+    rmSync(join(desktopDir, 'Claude Extensions'), { recursive: true });
+    rmSync(join(desktopDir, 'Claude Extensions Settings'), { recursive: true });
+    rmSync(listFile);
+    writeFileSync(listFile, '{ not json');
+    out = run([]);
+    check('an unreadable extension list counts as no extension', entryOf()?.args?.[1] === 'stdio', out.stdout);
+    rmSync(listFile);
+  }
+
+  console.log('\nA Node.js that moves or disappears');
+  {
+    const real = realpathSync(process.execPath);
+    const versioned = join(home, '.nvm', 'versions', 'node', 'v1.0.0', 'bin');
+    const stable = join(home, 'stablebin');
+    mkdirSync(versioned, { recursive: true });
+    mkdirSync(stable, { recursive: true });
+    symlinkSync(real, join(versioned, 'node'));
+    symlinkSync(real, join(stable, 'node'));
+    const viaVersioned = (args) => spawnSync(join(versioned, 'node'), [BIN, 'setup', ...args], {
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: { HOME: home, XDG_CONFIG_HOME: join(home, '.config'), LEGENDARY_MEMORY_DIR: data, NODE_NO_WARNINGS: '1', PATH: `${stable}:${fakeBin}:/usr/bin:/bin`, CLAUDE_LOG: claudeLog, CLAUDE_STATE: claudeState },
+    });
+    writeFileSync(desktopFile, JSON.stringify({ mcpServers: {} }));
+    viaVersioned([]);
+    const command = json(desktopFile).mcpServers?.['legendary-memory']?.command ?? '';
+    check('a version-specific Node.js is replaced by a stable path to the same binary', command !== '' && !/\.nvm/.test(command) && realpathSync(command) === real, command);
+    check('Claude Code is given the same stable path', !/\.nvm/.test(readFileSync(claudeLog, 'utf8').split('\n').filter((l) => /mcp add/.test(l)).pop() ?? ''));
+
+    writeFileSync(desktopFile, JSON.stringify({ mcpServers: { 'legendary-memory': { command: '/gone/for/good/node', args: [server, 'stdio'] } } }));
+    let out = run(['--dry-run']);
+    check('a dry run flags an entry whose Node.js is gone', /no longer there/.test(out.stdout), out.stdout);
+    out = run([]);
+    check('setup repairs it', realpathSync(json(desktopFile).mcpServers['legendary-memory'].command) === real, out.stdout);
+
+    run(['--undo']);
+    out = run([]);
+    const staleCli = readFileSync(claudeState, 'utf8').replace(/\S*\/node\b/, '/gone/for/good/node');
+    writeFileSync(claudeState, staleCli);
+    out = run([]);
+    check('Claude Code is re-added when its Node.js path differs', !/Claude Code\s+already connected/.test(out.stdout) && !readFileSync(claudeState, 'utf8').includes('/gone/for/good/node'), out.stdout);
   }
 } finally {
   rmSync(home, { recursive: true, force: true });

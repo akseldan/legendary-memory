@@ -20,7 +20,7 @@ import { buildServer } from '../core/mcp';
 import { MIN_PASSPHRASE_LENGTH, apiKey, dataDir, dbPath, passphrase, signInDbPath } from './config';
 import { startServer } from './server';
 import { bearerAuthorizer } from './ui';
-import { defaultRunner, formatResults, installBundle, runSetup } from './setup';
+import { defaultRunner, formatResults, installBundle, runSetup, stableNodePath } from './setup';
 import { loadSqlite, openDatabase } from './sqlite';
 import welcomeHtml from './ui/welcome.html';
 
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
             home: homedir(),
             platform: process.platform,
             env: process.env,
-            nodePath: process.execPath,
+            nodePath: stableNodePath(process.execPath),
             serverPath: installBundle(self, dataDir(), run.dryRun || run.undo),
             run: defaultRunner,
             ...run,
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
         home: homedir(),
         platform: process.platform,
         env: process.env,
-        nodePath: process.execPath,
+        nodePath: stableNodePath(process.execPath),
         serverPath,
         dryRun,
         undo,
@@ -203,10 +203,10 @@ Local key   : ${apiKey()}   (for \`serve\` and the importer; keep it private)
 The easy way: \`legendary-memory setup\` connects installed apps for you.
 
 By hand, Claude Desktop - add to claude_desktop_config.json under "mcpServers":
-  "legendary-memory": { "command": "${process.execPath}", "args": ["${self}", "stdio"] }
+  "legendary-memory": { "command": "${stableNodePath(process.execPath)}", "args": ["${self}", "stdio"] }
 
 By hand, Claude Code:
-  claude mcp add --scope user legendary-memory -- ${process.execPath} ${self} stdio
+  claude mcp add --scope user legendary-memory -- ${stableNodePath(process.execPath)} ${self} stdio
 
 Local HTTP (after \`serve\`):  http://127.0.0.1:8787/mcp  with header  Authorization: Bearer <key>`);
       return;
