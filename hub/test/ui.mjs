@@ -77,6 +77,35 @@ try {
   check('a saved checkpoint shows up as the latest', full.latest?.title === 'Chose the fan curve' && full.latest?.project === 'Cooling System' && full.latest?.source === 'claude', JSON.stringify(full.latest));
   check('the project is listed with its brief and session', full.projects[0]?.brief === 'Goal: quiet cooling.' && full.projects[0]?.sessions[0]?.title === 'Chose the fan curve' && full.counts.sessions === 1, JSON.stringify(full.projects));
   check('unknown page endpoints are not found', (await ui('/ui/nope')).status === 404);
+
+  console.log('\nSearch, edit, delete');
+  const post = (path, body, opts = {}) => ui(path, { body, ...opts });
+  check('search needs the key', (await ui('/ui/search?q=fan', { key: '' })).status === 401);
+  const found = await (await ui('/ui/search?q=thermistor')).json();
+  check('search finds a saved session', found.hits.some((h) => h.kind === 'checkpoint' && h.project === 'Cooling System'), JSON.stringify(found));
+  check('an empty search finds nothing', (await (await ui('/ui/search?q=')).json()).hits.length === 0);
+  const projectId = full.projects[0].id;
+  const sessionId = full.projects[0].sessions[0].id;
+  check('the summary carries ids', typeof projectId === 'string' && typeof sessionId === 'string');
+  check('editing needs the key', (await post('/ui/brief', { id: projectId, brief: 'x' }, { key: '' })).status === 401);
+  check('another site cannot edit', (await post('/ui/brief', { id: projectId, brief: 'x' }, { origin: 'https://evil.example' })).status === 403);
+  check('a brief that is not text is refused', (await post('/ui/brief', { id: projectId, brief: 5 })).status === 400);
+  check('a brief over the limit is refused', (await post('/ui/brief', { id: projectId, brief: 'a'.repeat(16001) })).status === 400);
+  check('editing an unknown project is not found', (await post('/ui/brief', { id: 'nope', brief: 'x' })).status === 404);
+  check('a brief can be edited', (await post('/ui/brief', { id: projectId, brief: 'Goal: silent and cool.' })).status === 200);
+  const edited = await (await ui('/ui/memory')).json();
+  check('the edit shows in the memory view', edited.projects[0].brief === 'Goal: silent and cool.', JSON.stringify(edited.projects[0]));
+  const asked = await (await mcp('recall', { project: 'Cooling System' })).text();
+  check('and assistants recall the edited brief', asked.includes('Goal: silent and cool.'), asked.slice(0, 300));
+  check('deleting needs the key', (await post('/ui/forget', { kind: 'checkpoint', id: sessionId }, { key: '' })).status === 401);
+  check('only projects and sessions can be deleted here', (await post('/ui/forget', { kind: 'profile', id: 'name' })).status === 400);
+  check('deleting an unknown session is not found', (await post('/ui/forget', { kind: 'checkpoint', id: 'nope' })).status === 404);
+  check('a session can be deleted', (await post('/ui/forget', { kind: 'checkpoint', id: sessionId })).status === 200);
+  const trimmed = await (await ui('/ui/memory')).json();
+  check('the session is gone and the project stays', trimmed.counts.sessions === 0 && trimmed.projects.length === 1, JSON.stringify(trimmed.counts));
+  check('a deleted session no longer turns up in search', (await (await ui('/ui/search?q=thermistor')).json()).hits.every((h) => h.kind !== 'checkpoint'));
+  check('a project can be deleted', (await post('/ui/forget', { kind: 'project', id: projectId })).status === 200);
+  check('the memory is empty again', (await (await ui('/ui/memory')).json()).counts.projects === 0);
 } finally {
   child.kill();
   rmSync(home, { recursive: true, force: true });

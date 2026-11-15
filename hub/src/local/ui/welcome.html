@@ -177,6 +177,19 @@
   .inside .brief { white-space: pre-wrap; color: var(--ink); margin: 0 0 12px; }
   .inside ul { margin: 0; padding-left: 1.1rem; }
   .inside .field { margin: 14px 0 0; width: 100%; }
+  .search { margin-bottom: 14px; }
+  .search input, .inside textarea { width: 100%; border-radius: 14px; border: 1.5px solid var(--line-strong); background: color-mix(in srgb, var(--card) 90%, transparent); color: var(--ink); font: inherit; }
+  .search input { min-height: 48px; padding: 0 18px; }
+  .inside textarea { min-height: 9rem; padding: 14px 16px; resize: vertical; line-height: 1.5; }
+  .search input:focus-visible, .inside textarea:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
+  .hit { padding: 12px 16px; border-radius: 14px; border: 1.5px solid var(--line); color: var(--soft); }
+  .hit b { color: var(--ink); }
+  .hit p { margin: 4px 0 0; overflow-wrap: anywhere; }
+  .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 12px; }
+  .tools .go { min-height: 42px; padding: 0 22px; font-size: 1rem; }
+  .danger { color: var(--bad); }
+  .ask { display: block; margin-top: 4px; }
+  .row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   .empty { padding: 22px 24px; border-radius: 16px; border: 1.5px dashed var(--line-strong); color: var(--soft); text-align: center; }
   .where { margin-top: 30px; text-align: center; color: var(--soft); font-size: 0.875rem; overflow-wrap: anywhere; }
   .home .actions { margin-top: 12px; }
@@ -331,6 +344,10 @@
       <p class="counts" id="counts"></p>
       <div class="block">
         <h2>Your projects</h2>
+        <div class="search">
+          <input id="q" type="search" placeholder="Search your memory" aria-label="Search your memory" autocomplete="off">
+          <ul class="stack" id="hits" hidden></ul>
+        </div>
         <div class="empty" id="empty" hidden>Nothing saved yet. Ask any connected app to save a checkpoint, and the project shows up here.</div>
         <ul class="stack" id="projects"></ul>
       </div>
@@ -389,8 +406,8 @@
       this.memory.latest = { id: 'demo', title: 'Tested the setup', project: 'Setup Test', source: 'claude', at };
       this.memory.counts = { projects: 2, sessions: 3, files: 1, facts: 2 };
       this.memory.projects = [
-        { name: 'Setup Test', status: 'active', updated_at: at, files: 0, brief: 'Goal: confirm Legendary Memory works across apps.\nState: first checkpoint saved from Claude Desktop.\nNext: recall it from another app.', sessions: [{ title: 'Tested the setup', source: 'claude', created_at: at }] },
-        { name: 'Cooling System', status: 'active', updated_at: at, files: 1, brief: 'Goal: a quiet cooling loop for the workshop PC.\nState: thermistor-driven fan curve chosen over fixed speeds.\nNext: test under load and log temperatures.', sessions: [{ title: 'Chose the fan curve', source: 'chatgpt', created_at: at }, { title: 'Compared pump options', source: 'claude', created_at: at }] },
+        { id: 'p1', name: 'Setup Test', status: 'active', updated_at: at, files: 0, brief: 'Goal: confirm Legendary Memory works across apps.\nState: first checkpoint saved from Claude Desktop.\nNext: recall it from another app.', sessions: [{ id: 's1', title: 'Tested the setup', source: 'claude', created_at: at }] },
+        { id: 'p2', name: 'Cooling System', status: 'active', updated_at: at, files: 1, brief: 'Goal: a quiet cooling loop for the workshop PC.\nState: thermistor-driven fan curve chosen over fixed speeds.\nNext: test under load and log temperatures.', sessions: [{ id: 's2', title: 'Chose the fan curve', source: 'chatgpt', created_at: at }, { id: 's3', title: 'Compared pump options', source: 'claude', created_at: at }] },
       ];
     },
   };
@@ -400,6 +417,17 @@
       await wait(body ? 700 : 150);
       if (path === '/ui/apps') return { apps: fake.apps };
       if (path === '/ui/connect') { for (const a of fake.apps) if (body.only.includes(a.app)) a.status = 'connected'; return { apps: fake.apps }; }
+      if (path === '/ui/brief') { const p = fake.memory.projects.find((x) => x.id === body.id); if (p) p.brief = body.brief; return { ok: true }; }
+      if (path === '/ui/forget') {
+        const m = fake.memory;
+        m.projects = body.kind === 'project' ? m.projects.filter((p) => p.id !== body.id) : m.projects.map((p) => ({ ...p, sessions: p.sessions.filter((s) => s.id !== body.id) }));
+        m.counts.projects = m.projects.length; m.counts.sessions = m.projects.reduce((n, p) => n + p.sessions.length, 0);
+        return { ok: true };
+      }
+      if (path.startsWith('/ui/search')) {
+        const q = decodeURIComponent(path.split('q=')[1] || '').toLowerCase();
+        return { hits: fake.memory.projects.filter((p) => (p.name + ' ' + p.brief).toLowerCase().includes(q)).map((p) => ({ kind: 'project', title: p.name, snippet: p.brief.split('\n')[0], project: p.name })) };
+      }
       return fake.memory;
     }
     const res = await fetch(path, {
@@ -620,15 +648,80 @@
       $('counts').textContent = [count(c.projects, 'project', 'projects'), count(c.sessions, 'session', 'sessions'), count(c.files, 'saved file', 'saved files'), count(c.facts, 'fact about you', 'facts about you')].join(', ');
       $('where').textContent = `Kept in ${memory.dataFile}`;
       $('empty').hidden = memory.projects.length > 0;
-      $('projects').replaceChildren(...memory.projects.map((p) => el('li', {}, [el('details', {}, [
-        el('summary', {}, [p.name, el('span', { className: 'meta', textContent: `${p.status}, updated ${day(p.updated_at)}` })]),
-        el('div', { className: 'inside' }, [
-          el('p', { className: 'brief', textContent: p.brief || 'No brief yet. It is written the next time an assistant saves a checkpoint with one.' }),
-          el('ul', {}, p.sessions.map((s) => el('li', { textContent: `${s.title} (${nice(s.source)}, ${day(s.created_at)})` }))),
-        ]),
-      ])])));
+      const open = new Set([...document.querySelectorAll('#projects details[open]')].map((d) => d.dataset.id));
+      $('projects').replaceChildren(...memory.projects.map((p) => projectItem(p, open.has(p.id))));
     } catch (error) { fail(error); }
   }
+
+  // A delete is never one click: the row swaps itself for a plain question first.
+  function askFirst(host, message, run) {
+    const before = [...host.childNodes];
+    const restore = () => { host.classList.remove('ask'); host.replaceChildren(...before); };
+    if (host.tagName === 'SPAN') host.classList.add('ask');
+    host.replaceChildren(
+      el('span', { textContent: message + ' ' }),
+      el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete', onclick: async (event) => {
+        event.target.disabled = true;
+        try { await api('/ui/forget', run); await loadMemory(); } catch (error) { host.replaceChildren(el('span', { className: 'danger', textContent: `Could not delete: ${error.message}` })); }
+      } }),
+      el('button', { type: 'button', className: 'quiet', textContent: 'Cancel', onclick: restore }),
+    );
+  }
+
+  function projectItem(p, isOpen) {
+    const brief = el('p', { className: 'brief', textContent: p.brief || 'No brief yet. Edit it here, or it is written the next time an assistant saves a checkpoint with one.' });
+    const tools = el('div', { className: 'tools' });
+    const showTools = () => tools.replaceChildren(
+      el('button', { type: 'button', className: 'quiet', textContent: 'Edit brief', onclick: edit }),
+      el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete project', onclick: () => askFirst(tools, `Delete ${p.name} and all its sessions and files? This cannot be undone.`, { kind: 'project', id: p.id }) }),
+    );
+    function edit() {
+      const area = el('textarea', { value: p.brief, maxLength: 16000 });
+      area.setAttribute('aria-label', `Brief for ${p.name}`);
+      const note = el('span', { className: 'danger' });
+      const save = el('button', { type: 'button', className: 'go', textContent: 'Save', onclick: async () => {
+        save.disabled = true;
+        try { await api('/ui/brief', { id: p.id, brief: area.value }); await loadMemory(); } catch (error) { note.textContent = `Could not save: ${error.message}`; save.disabled = false; }
+      } });
+      brief.replaceWith(area);
+      tools.replaceChildren(save, el('button', { type: 'button', className: 'quiet', textContent: 'Cancel', onclick: () => { area.replaceWith(brief); showTools(); } }), note);
+      area.focus();
+    }
+    showTools();
+    const sessions = el('ul', {}, p.sessions.map((s) => {
+      const row = el('li', {});
+      const label = el('span', { textContent: `${s.title} (${nice(s.source)}, ${day(s.created_at)}) ` });
+      const mark = el('span', {}, [el('button', { type: 'button', className: 'quiet', textContent: 'Delete', onclick: () => askFirst(mark, 'Delete this session? This cannot be undone.', { kind: 'checkpoint', id: s.id }) })]);
+      row.append(label, mark);
+      return row;
+    }));
+    const details = el('details', { open: isOpen }, [
+      el('summary', {}, [p.name, el('span', { className: 'meta', textContent: `${p.status}, updated ${day(p.updated_at)}` })]),
+      el('div', { className: 'inside' }, [brief, sessions, tools]),
+    ]);
+    details.dataset.id = p.id;
+    return el('li', {}, [details]);
+  }
+
+  // ---- search
+  let searching = 0;
+  let typing;
+  $('q').addEventListener('input', () => {
+    clearTimeout(typing);
+    typing = setTimeout(async () => {
+      const query = $('q').value.trim();
+      const mine = ++searching;
+      if (query.length < 2) { $('hits').hidden = true; return; }
+      try {
+        const { hits } = await api(`/ui/search?q=${encodeURIComponent(query)}`);
+        if (mine !== searching) return;
+        $('hits').hidden = false;
+        $('hits').replaceChildren(...(hits.length ? hits.map((h) => el('li', { className: 'hit' }, [
+          el('b', { textContent: h.title }), el('small', { textContent: ` ${h.kind}${h.project ? ` in ${h.project}` : ''}` }), el('p', { textContent: h.snippet }),
+        ])) : [el('li', { className: 'hit', textContent: 'Nothing found.' })]));
+      } catch (error) { fail(error); }
+    }, 250);
+  });
 
   function fail(error) {
     if (error.message === 'locked') return show('locked');

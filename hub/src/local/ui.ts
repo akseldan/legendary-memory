@@ -20,6 +20,9 @@ export interface UiOptions {
   setup: (run: { dryRun: boolean; undo: boolean; only?: string[] }) => SetupResult[];
 }
 
+/** Same ceiling as the save_checkpoint tool's brief. */
+const MAX_BRIEF = 16000;
+
 type AppState = { app: string; status: 'found' | 'connected' | 'missing' | 'problem'; detail?: string };
 
 const PAGE_HEADERS = {
@@ -72,12 +75,14 @@ async function memorySummary(db: Db, dataFile: string) {
       : null,
     projects: await Promise.all(
       projects.slice(0, 50).map(async (p) => ({
+        id: p.id,
         name: p.name,
         status: p.status,
         updated_at: p.updated_at,
-        brief: p.brief.length > 900 ? `${p.brief.slice(0, 900)}…` : p.brief,
+        // Whole brief, because the page edits it in place.
+        brief: p.brief,
         files: (await store.listArtifacts(db, p.id)).length,
-        sessions: (await store.recentCheckpoints(db, p.id, 5)).map((c) => ({ title: c.title, source: c.source, created_at: c.created_at })),
+        sessions: (await store.recentCheckpoints(db, p.id, 10)).map((c) => ({ id: c.id, title: c.title, source: c.source, created_at: c.created_at })),
       })),
     ),
   };
@@ -100,6 +105,25 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
   const route = `${request.method} ${url.pathname}`;
   if (route === 'GET /ui/apps') return json({ apps: appStates(ui.setup({ dryRun: true, undo: false })) });
   if (route === 'GET /ui/memory') return json(await memorySummary(db, ui.dataFile));
+  if (route === 'GET /ui/search') {
+    const [hits, projects] = await Promise.all([store.search(db, url.searchParams.get('q') ?? '', { limit: 10 }), store.listProjects(db)]);
+    const names = new Map(projects.map((p) => [p.id, p.name]));
+    return json({ hits: hits.map((h) => ({ kind: h.kind, title: h.title, snippet: h.snippet, project: (h.project_id && names.get(h.project_id)) || '' })) });
+  }
+  if (route === 'POST /ui/brief') {
+    const body = (await request.json().catch(() => ({}))) as { id?: unknown; brief?: unknown };
+    if (typeof body.id !== 'string' || typeof body.brief !== 'string' || body.brief.length > MAX_BRIEF) return json({ error: 'bad request' }, 400);
+    const project = await store.getProject(db, body.id);
+    if (!project) return json({ error: 'not found' }, 404);
+    await store.updateProject(db, project, { brief: body.brief });
+    return json({ ok: true });
+  }
+  if (route === 'POST /ui/forget') {
+    const body = (await request.json().catch(() => ({}))) as { kind?: unknown; id?: unknown };
+    // The page lists only projects and sessions, so it may delete only those.
+    if ((body.kind !== 'project' && body.kind !== 'checkpoint') || typeof body.id !== 'string') return json({ error: 'bad request' }, 400);
+    return (await store.forget(db, body.kind, body.id)) ? json({ ok: true }) : json({ error: 'not found' }, 404);
+  }
   if (route === 'POST /ui/connect' || route === 'POST /ui/disconnect') {
     const body = (await request.json().catch(() => ({}))) as { only?: unknown };
     const only = Array.isArray(body.only) ? body.only.filter((name): name is string => typeof name === 'string') : undefined;

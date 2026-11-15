@@ -82,7 +82,7 @@ Do not charge anyone until all of these are true:
 | 10 | **Skill** (`skills/legendary-memory/SKILL.md`) | **Written. Not yet loaded in an agent.** |
 | 11 | Publish: npm, GitHub release, directories | Not started. Needs the owner's npm account. |
 | 12 | Copy a memory between homes (local, own server, cloud) | Not started |
-| 13 | **Welcome page and "your memory" view** (`legendary-memory start`) | **Done 2026-11-15: guided setup in the browser, live wait for the first checkpoint, read-only list of projects. 17 endpoint checks plus a full click-through in a headless browser. Not yet opened on a real Mac. Editing and deleting from the page: not started.** |
+| 13 | **Welcome page and "your memory" view** (`legendary-memory start`) | **Done 2026-11-15: guided setup in the browser, live wait for the first checkpoint, read-only list of projects. 17 endpoint checks plus a full click-through in a headless browser. Not yet opened on a real Mac. Search, editing a brief and deleting a project or session were added 2026-11-15 (37 endpoint checks, clicked through in Chrome on sample data). Not yet on `host`.** |
 | 14 | Hosted service | Design sketch only (below) |
 
 Every suite passes as of 2026-11-15, from `hub/`: `npm run test:all` (types, 31 unit, local
