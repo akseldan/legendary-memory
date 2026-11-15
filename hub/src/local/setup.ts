@@ -120,33 +120,52 @@ function connectJsonApp(app: JsonApp, ctx: SetupContext): SetupResult {
   return result('connected', `${ctx.dryRun ? 'would write' : 'wrote'} ${file}.${note}`);
 }
 
-/** Claude Code keeps its settings in a file it manages itself, so go through its own command. */
-function connectClaudeCode(ctx: SetupContext): SetupResult {
-  const result = (status: SetupResult['status'], detail: string): SetupResult => ({ app: 'Claude Code', status, detail });
-  const add = ['mcp', 'add', '--scope', 'user', SERVER_NAME, '--', ctx.nodePath, ctx.serverPath, 'stdio'];
-  const shown = `claude ${add.join(' ')}`;
-  if (ctx.run('claude', ['--version']).code !== 0) return result('not-installed', '');
+/**
+ * Apps that manage their own settings file and offer a command for it. Going through the
+ * app's command is safer than editing its file: the app keeps its own format.
+ */
+interface CliApp {
+  app: string;
+  program: string;
+  /** Extra flags for `mcp add`, before the server name. */
+  addFlags: string[];
+  /** Said after a successful add. */
+  added: string;
+}
 
-  const existing = ctx.run('claude', ['mcp', 'get', SERVER_NAME]);
+const CLI_APPS: CliApp[] = [
+  { app: 'Claude Code', program: 'claude', addFlags: ['--scope', 'user'], added: 'added for every project (user scope)' },
+  // Codex's settings are shared by its command line, editor extension and desktop app.
+  { app: 'Codex', program: 'codex', addFlags: [], added: 'added for every project' },
+];
+
+function connectCliApp(cli: CliApp, ctx: SetupContext): SetupResult {
+  const result = (status: SetupResult['status'], detail: string): SetupResult => ({ app: cli.app, status, detail });
+  const add = ['mcp', 'add', ...cli.addFlags, SERVER_NAME, '--', ctx.nodePath, ctx.serverPath, 'stdio'];
+  const shown = `${cli.program} ${add.join(' ')}`;
+  const remove = ['mcp', 'remove', SERVER_NAME];
+  if (ctx.run(cli.program, ['--version']).code !== 0) return result('not-installed', '');
+
+  const existing = ctx.run(cli.program, ['mcp', 'get', SERVER_NAME]);
   const present = existing.code === 0;
   if (ctx.undo) {
     if (!present) return result('skipped', 'was not connected');
-    if (ctx.dryRun) return result('removed', `would run: claude mcp remove ${SERVER_NAME}`);
-    const removed = ctx.run('claude', ['mcp', 'remove', SERVER_NAME]);
-    return removed.code === 0 ? result('removed', 'removed') : result('failed', `Could not remove it. Run: claude mcp remove ${SERVER_NAME}`);
+    if (ctx.dryRun) return result('removed', `would run: ${cli.program} ${remove.join(' ')}`);
+    return ctx.run(cli.program, remove).code === 0
+      ? result('removed', 'removed')
+      : result('failed', `Could not remove it. Run: ${cli.program} ${remove.join(' ')}`);
   }
-  if (present && existing.output.includes(ctx.serverPath)) return result('already', 'user scope');
+  if (present && existing.output.includes(ctx.serverPath)) return result('already', '');
   if (ctx.dryRun) return result('connected', `would run: ${shown}`);
-  if (present) ctx.run('claude', ['mcp', 'remove', SERVER_NAME]);
-  const added = ctx.run('claude', add);
-  return added.code === 0 ? result('connected', 'added for every project (user scope)') : result('failed', `Could not add it. Run: ${shown}`);
+  if (present) ctx.run(cli.program, remove);
+  return ctx.run(cli.program, add).code === 0 ? result('connected', cli.added) : result('failed', `Could not add it. Run: ${shown}`);
 }
 
 export function runSetup(ctx: SetupContext): SetupResult[] {
   const chosen = (app: string): boolean => !ctx.only || ctx.only.includes(app);
   return [
     ...JSON_APPS.filter((app) => chosen(app.app)).map((app) => connectJsonApp(app, ctx)),
-    ...(chosen('Claude Code') ? [connectClaudeCode(ctx)] : []),
+    ...CLI_APPS.filter((cli) => chosen(cli.app)).map((cli) => connectCliApp(cli, ctx)),
   ];
 }
 
@@ -189,7 +208,7 @@ export function formatResults(results: SetupResult[], undo: boolean, dryRun = fa
   }
   const touched = results.some((r) => r.status === 'connected' || r.status === 'already');
   if (!undo && !touched) {
-    lines.push('', 'No supported AI app was found. Install Claude Desktop, Claude Code, Cursor, Windsurf or Gemini CLI,', 'or run `legendary-memory info` for settings to paste into another app.');
+    lines.push('', 'No supported AI app was found. Install Claude Desktop, Claude Code, Codex, Cursor, Windsurf or Gemini CLI,', 'or run `legendary-memory info` for settings to paste into another app.');
   }
   if (!undo && touched && !dryRun) {
     lines.push(

@@ -35,6 +35,7 @@ const STATUS = z.enum(['active', 'paused', 'done', 'archived']);
 function sourceLabel(client: string): string {
   const name = client.toLowerCase();
   if (name.includes('claude')) return 'claude';
+  if (name.includes('codex')) return 'codex';
   if (name.includes('chatgpt') || name.includes('openai')) return 'chatgpt';
   if (name.includes('gemini')) return 'gemini';
   return slugify(client).slice(0, 30) || 'assistant';

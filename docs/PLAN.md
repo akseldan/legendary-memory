@@ -76,9 +76,9 @@ Do not charge anyone until all of these are true:
 | 4 | Import existing history from exports | Importer written and tested on made-up exports. Optional one-time backfill; not run on real exports. |
 | 5 | Browser extension for automatic capture | Not started. Needs the owner present to test. |
 | 6 | Obsidian mirror | Done 2026-11-12. Not yet run on the real vault. |
-| 7 | **One-command install** (`legendary-memory setup`) | **Done 2026-11-15, tested against made-up app folders (18 checks). Not yet tried with the real apps.** |
+| 7 | **One-command install** (`legendary-memory setup`) | **Done 2026-11-15, tested against made-up app folders (20 checks). Not yet tried with the real apps.** |
 | 8 | **Run it on your own server** (`legendary-memory host`, Docker) | **Done 2026-11-15. Passes the same 40-check suite as Cloudflare plus 13 of its own. Docker image not built or run yet. Not yet tried with real Claude or ChatGPT.** |
-| 9 | **One-click Claude Desktop install** (`.mcpb`) | **Bundle builds and validates. Never installed in Claude Desktop.** |
+| 9 | **One-click Claude Desktop install** (`.mcpb`) | **Bundle builds and validates. Never installed in Claude Desktop. The owner's Claude Desktop (5.11492.5, checked 2026-11-15) reports Node.js 24.22.1, above the 22.13 the bundle needs, so the Node question looks settled.** |
 | 10 | **Skill** (`skills/legendary-memory/SKILL.md`) | **Written. Not yet loaded in an agent.** |
 | 11 | Publish: npm, GitHub release, directories | Not started. Needs the owner's npm account. |
 | 12 | Copy a memory between homes (local, own server, cloud) | Not started |
@@ -86,7 +86,7 @@ Do not charge anyone until all of these are true:
 | 14 | Hosted service | Design sketch only (below) |
 
 Every suite passes as of 2026-11-15, from `hub/`: `npm run test:all` (types, 31 unit, local
-26, host 13 including the shared 40, setup 18, welcome page 17); importer 11 and mirror 6
+26, host 13 including the shared 40, setup 20, welcome page 17); importer 11 and mirror 6
 from the repo root.
 The Cloudflare e2e (`npm run e2e` against `wrangler dev`) was rerun too: 40 of 40. The only
 change to Cloudflare code is one optional setting (`DISABLE_CIMD`), unset there.
@@ -100,9 +100,9 @@ Things only a real app can prove, cheapest first:
    through it. Check Claude Desktop and Claude Code list the tools afterwards. Note: this
    local memory is a *separate, empty* memory from the owner's Cloudflare hub. Use it to
    test the install, then `setup --undo`, or the two will be confused with each other.
-2. `npm run pack:mcpb`, double-click `dist/legendary-memory.mcpb`. Unknown: whether the
-   Node.js inside Claude Desktop is 22.13 or newer. If it is older the extension fails to
-   start with a clear message, and the fix is to ship a small SQLite fallback.
+2. `npm run pack:mcpb`, double-click `dist/legendary-memory.mcpb`. The Node.js inside the
+   owner's Claude Desktop is 24.22.1, new enough; older Claude Desktop versions may not be,
+   and then the extension fails to start with a clear message.
 3. Phase 3: connect ChatGPT to the existing Cloudflare hub. Does a Plus account see the
    tools, and can it *save*? This decides how ChatGPT is pitched.
 4. `host` behind a tunnel: start a tunnel, start `host --url <tunnel address> --behind-proxy`,
@@ -250,7 +250,10 @@ policy forbids loading anything from elsewhere.
 
 `setup` (`src/local/setup.ts`): copies the bundle to `~/.legendary-memory/bin/` and adds a
 `legendary-memory` entry to the config of each installed app (Claude Desktop, Cursor,
-Windsurf, Gemini CLI by JSON file; Claude Code through its own `claude mcp add`). It only
+Windsurf, Gemini CLI by JSON file; Claude Code and Codex through their own `mcp add`
+commands). Codex matters for the pitch: its settings are shared by its command line, editor
+extension and desktop app, so it is the OpenAI-side assistant that can use the local memory
+with no account and no web Developer mode. It only
 touches installed apps, keeps everything else in the file, saves a
 `.before-legendary-memory` copy, leaves files it cannot parse alone, and has `--dry-run`
 and `--undo`. It writes the full path of the Node binary, because apps started from the

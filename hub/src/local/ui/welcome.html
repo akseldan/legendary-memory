@@ -263,8 +263,8 @@
 
   const fake = {
     apps: [
-      { app: 'Claude Desktop', status: 'found' }, { app: 'Claude Code', status: 'found' }, { app: 'Cursor', status: 'found' },
-      { app: 'Windsurf', status: 'missing' }, { app: 'Gemini CLI', status: 'missing' },
+      { app: 'Claude Desktop', status: 'found' }, { app: 'Claude Code', status: 'found' }, { app: 'Codex', status: 'found' },
+      { app: 'Cursor', status: 'missing' }, { app: 'Gemini CLI', status: 'missing' },
     ],
     memory: { dataFile: '~/.legendary-memory/memory.db', counts: { projects: 0, sessions: 0, files: 0, facts: 0 }, latest: null, projects: [] },
     arrive() {
@@ -303,8 +303,8 @@
   const narrow = matchMedia('(max-width: 860px)');
   function geometry() {
     return narrow.matches
-      ? { w: 360, h: 230, knot: [64, 115], pegX: 196, top: 30, gap: 42, r: 26 }
-      : { w: 470, h: 500, knot: [112, 250], pegX: 292, top: 78, gap: 86, r: 48 };
+      ? { w: 360, h: 262, knot: [64, 131], pegX: 196, top: 28, gap: 41, r: 26 }
+      : { w: 470, h: 520, knot: [112, 260], pegX: 292, top: 60, gap: 80, r: 48 };
   }
   const threadPath = (g, y) => `M${g.knot[0] + g.r},${g.knot[1]} C${g.knot[0] + g.r + 60},${g.knot[1]} ${g.pegX - 70},${y} ${g.pegX},${y}`;
   /** Pass true to draw the threads on, once; later redraws inside that moment carry on from where it is. */
@@ -449,7 +449,7 @@
       go.disabled = false;
       go.onclick = () => step(1);
     } else {
-      $('connect-lede').textContent = 'No supported app was found. Install Claude Desktop, Claude Code, Cursor, Windsurf or Gemini CLI, then check again.';
+      $('connect-lede').textContent = 'No supported app was found. Install Claude Desktop, Claude Code, Codex, Cursor, Windsurf or Gemini CLI, then check again.';
       go.textContent = 'Continue anyway';
       go.disabled = false;
       go.onclick = () => step(1);
@@ -515,7 +515,7 @@
   }
 
   // ---- your memory
-  const KNOWN = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', cursor: 'Cursor', windsurf: 'Windsurf' };
+  const KNOWN = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', cursor: 'Cursor', windsurf: 'Windsurf', codex: 'Codex' };
   const nice = (source) => KNOWN[source] || (source ? source.charAt(0).toUpperCase() + source.slice(1).replace(/-/g, ' ') : 'an assistant');
   const day = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
   const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;

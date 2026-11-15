@@ -17,7 +17,7 @@ server of your own, or on Cloudflare's free plan. Your data stays with you in ev
 |---|---|---|---|
 | Account needed | None | None (a domain or a tunnel for the address) | Free Cloudflare account |
 | Setup | `npm start`, then follow the page | `docker compose up -d` | `wrangler deploy` |
-| Claude Desktop, Claude Code, Cursor, Windsurf, Gemini CLI | Yes | Yes | Yes |
+| Claude Desktop, Claude Code, Codex, Cursor, Windsurf, Gemini CLI | Yes | Yes | Yes |
 | claude.ai, Claude on iPhone/iPad, ChatGPT (web) | No | Yes | Yes |
 | Works with your computer off | No | Yes, if the server is on | Yes |
 | Where the data is | One file in your home folder | One file on your server | Your Cloudflare database |
@@ -36,7 +36,7 @@ npm install && npm start
 ```
 
 That opens a welcome page in your browser. It finds the AI apps on this computer (Claude
-Desktop, Claude Code, Cursor, Windsurf, Gemini CLI), connects the ones you pick, waits with
+Desktop, Claude Code, Codex, Cursor, Windsurf, Gemini CLI), connects the ones you pick, waits with
 you for your first saved checkpoint, and afterwards shows what is in your memory. The page
 is served by the program on your own computer and only opens with the one-time key in the
 address it prints; it loads nothing from the internet.

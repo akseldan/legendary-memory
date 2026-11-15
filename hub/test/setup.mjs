@@ -51,6 +51,20 @@ esac
 `,
 );
 chmodSync(join(fakeBin, 'claude'), 0o755);
+// A pretend `codex` with the same four commands, keeping its own state file.
+writeFileSync(
+  join(fakeBin, 'codex'),
+  `#!/bin/sh
+echo "codex $@" >> "$CLAUDE_LOG"
+case "$1 $2" in
+  "--version ") echo "codex-cli 9.9.9";;
+  "mcp get") [ -f "$CLAUDE_STATE.codex" ] && cat "$CLAUDE_STATE.codex" || exit 1;;
+  "mcp add") echo "$@" > "$CLAUDE_STATE.codex";;
+  "mcp remove") rm -f "$CLAUDE_STATE.codex";;
+esac
+`,
+);
+chmodSync(join(fakeBin, 'codex'), 0o755);
 
 const desktopDir = join(home, '.config', 'Claude');
 const desktopFile = join(desktopDir, 'claude_desktop_config.json');
@@ -94,6 +108,7 @@ try {
     check('Cursor config is created', json(cursorFile).mcpServers?.['legendary-memory']?.args?.[0] === server);
     check('an unparseable file is left untouched and reported', readFileSync(geminiFile, 'utf8') === brokenGemini && /Gemini CLI\s+NEEDS A HAND/.test(out.stdout) && out.status === 1, out.stdout);
     check('Claude Code is added through its own command', /mcp add --scope user legendary-memory -- .* stdio/.test(readFileSync(claudeLog, 'utf8')), readFileSync(claudeLog, 'utf8'));
+    check('Codex is added through its own command', /codex mcp add legendary-memory -- .* stdio/.test(readFileSync(claudeLog, 'utf8')) && /Codex\s+connected/.test(out.stdout), out.stdout);
     check('apps not installed are only mentioned', /Windsurf\s+not found/.test(out.stdout), out.stdout);
     check('the server is copied to a permanent place', existsSync(server));
 
@@ -110,7 +125,7 @@ try {
   {
     const before = readFileSync(desktopFile, 'utf8');
     const out = run([]);
-    check('reports already connected and rewrites nothing', /Claude Desktop\s+already connected/.test(out.stdout) && /Claude Code\s+already connected/.test(out.stdout) && readFileSync(desktopFile, 'utf8') === before, out.stdout);
+    check('reports already connected and rewrites nothing', /Claude Desktop\s+already connected/.test(out.stdout) && /Claude Code\s+already connected/.test(out.stdout) && /Codex\s+already connected/.test(out.stdout) && readFileSync(desktopFile, 'utf8') === before, out.stdout);
   }
 
   console.log('\nUndo');
@@ -120,6 +135,7 @@ try {
     check('removes only its own entry', desktop.mcpServers['legendary-memory'] === undefined && desktop.mcpServers.other?.command === 'npx' && desktop.theme === 'dark', JSON.stringify(desktop));
     check('Cursor entry is removed', json(cursorFile).mcpServers['legendary-memory'] === undefined);
     check('Claude Code entry is removed', !existsSync(claudeState) && /Claude Code\s+disconnected/.test(out.stdout), out.stdout);
+    check('Codex entry is removed', !existsSync(`${claudeState}.codex`) && /Codex\s+disconnected/.test(out.stdout), out.stdout);
     check('your memory is not deleted', existsSync(join(data, 'memory.db')));
   }
 } finally {
