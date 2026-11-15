@@ -1,5 +1,12 @@
 # legendary-memory
 
+[**Download for Claude Desktop**](https://github.com/akseldan/legendary-memory/releases/latest/download/legendary-memory.mcpb)
+&nbsp;·&nbsp; [All releases](https://github.com/akseldan/legendary-memory/releases/latest)
+
+Double-click the downloaded file and Claude Desktop installs it. Needs Claude Desktop and
+nothing else. Your memory stays in one file on your computer. Then, in a chat, say "save a
+checkpoint for this project", and later "recall that project" in any connected app.
+
 One memory shared across your AI assistants. Start a project in ChatGPT, then tell Claude
 "recall the cooling project" and it picks up where you left off.
 
