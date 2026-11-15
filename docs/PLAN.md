@@ -198,7 +198,8 @@ Not built. Written down so the pieces above are shaped to fit it.
 
 ## Decisions for the owner
 
-- License: stay MIT or move to AGPL before anyone else contributes.
+- License: decided on 2026-11-15 to stay MIT. Anyone may sell hosting of this code; the
+  trade-off is accepted. Revisit only before the first outside contributor.
 - Whether to run a hosted service at all, or keep this a free tool (it is already a strong
   portfolio project for the internship search either way).
 - If hosted: relay-only first, or stored memory first.
