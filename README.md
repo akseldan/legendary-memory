@@ -3,28 +3,49 @@
 One memory shared across your AI assistants. Start a project in ChatGPT, then tell Claude
 "recall the cooling project" and it picks up where you left off.
 
-It is a small server you own. Run it on your own computer with no account at all, or host
-it for free on Cloudflare so your phone and web apps can reach it. Your data stays with you
-either way.
+It is a small program you own. Run it on your own computer with no account at all, on a
+server of your own, or on Cloudflare's free plan. Your data stays with you in every case.
 
-> **Status:** deployed on Cloudflare and connected to Claude (web, Mac, iPhone); save and
-> recall work. The local target passes its tests but has not been tried with the real Claude
-> Desktop app yet. ChatGPT is not connected yet. See [docs/PLAN.md](docs/PLAN.md).
+> **Status (0.3, November 2026):** the Cloudflare version is in daily use with Claude on
+> Mac and iPhone. The one-command local install and the run-it-on-your-own-server version
+> pass their tests but have not been tried with the real apps yet. ChatGPT is not connected
+> yet. See [docs/PLAN.md](docs/PLAN.md).
 
-## Pick how to run it
+## Pick where your memory lives
 
-| | Local (no account) | Cloudflare (free account) |
-|---|---|---|
-| Setup | `npm run local`, nothing else | `wrangler deploy` once |
-| Claude Desktop, Claude Code | Yes, over stdio | Yes |
-| claude.ai, Claude on iPhone/iPad | No | Yes |
-| ChatGPT (web) | No | Yes |
-| Works with the computer off | No | Yes |
-| Where the data lives | One SQLite file on your computer | Your Cloudflare account |
+| | Your computer | Your own server | Your Cloudflare account |
+|---|---|---|---|
+| Account needed | None | None (a domain or a tunnel for the address) | Free Cloudflare account |
+| Setup | `legendary-memory setup` | `docker compose up -d` | `wrangler deploy` |
+| Claude Desktop, Claude Code, Cursor, Windsurf, Gemini CLI | Yes | Yes | Yes |
+| claude.ai, Claude on iPhone/iPad, ChatGPT (web) | No | Yes | Yes |
+| Works with your computer off | No | Yes, if the server is on | Yes |
+| Where the data is | One file in your home folder | One file on your server | Your Cloudflare database |
 
-Web apps like claude.ai and ChatGPT connect from the internet, so they can only reach a
-server with a public address. That is the only reason the Cloudflare target exists. Anyone
-can start local and add Cloudflare later; the memory logic is identical.
+Web and phone apps connect from the internet, so they can only reach a memory that has a
+public https address. That is the only reason the second and third columns exist. The
+memory logic is the same code in all three.
+
+## Quick start: on your computer, no account
+
+Needs [Node.js](https://nodejs.org) 22.13 or newer.
+
+```sh
+git clone https://github.com/akseldan/legendary-memory && cd legendary-memory/hub
+npm install && npm run build:local
+node dist/legendary-memory.mjs setup --dry-run   # shows what it would change
+node dist/legendary-memory.mjs setup             # connects the AI apps it finds
+```
+
+`setup` adds Legendary Memory to Claude Desktop, Claude Code, Cursor, Windsurf and Gemini
+CLI if they are installed. It keeps everything else in their settings, saves a copy of each
+file before changing it, and `setup --undo` takes it out again. Restart the app, then say
+"save a checkpoint for this project" in one and "recall the ... project" in another.
+
+Claude Desktop only: `npm run pack:mcpb` builds `dist/legendary-memory.mcpb`, which installs
+with a double-click.
+
+Your memory is the file `~/.legendary-memory/memory.db`. Back it up by copying it.
 
 ## How it works
 
@@ -32,7 +53,8 @@ can start local and add Cloudflare later; the memory logic is identical.
   about you, and your chat history, with search over all of it.
 - **Claude and ChatGPT** connect to the hub as a connector or local tool and get seven tools: `recall`,
   `search`, `read`, `save_checkpoint`, `save_artifact`, `remember`, `forget`.
-- **A browser extension and an importer** (not built yet) feed in full chat history.
+- **An importer** loads your old chats from each app's data export. A browser extension for
+  automatic capture is planned.
 
 ## What works where
 
@@ -47,34 +69,41 @@ can start local and add Cloudflare later; the memory logic is identical.
 hub/
   src/core/        the memory logic, runtime-agnostic: store (database), mcp (the tools),
                    api (importer endpoints), redact (secret filter), db (the interface)
-  src/local/       local target: SQLite file, stdio + localhost HTTP, CLI
+  src/local/       your computer or server: SQLite file, the `setup`, `stdio`, `serve` and
+                   `host` commands
   src/cloudflare/  Cloudflare target: Worker, OAuth sign-in page, D1 and KV bindings
+                   (`host` reuses this handler and sign-in page as they are)
   migrations/      database schema (shared by both targets)
 importer/          loads ChatGPT and Claude data exports into the hub
 mirror/            copies your memory into an Obsidian vault as Markdown
-docs/PLAN.md       architecture, decisions, phases, test checklist
+skills/            a skill that teaches an agent when to recall and what to save
+packaging/mcpb/    one-click Claude Desktop install
+Dockerfile, docker-compose.yml   run it on your own server
+docs/PLAN.md       product plan, architecture, decisions, phases
+docs/SELF-HOST.md  running it on your own server
 ```
 
-## Run it locally (no account)
+## Other local commands
 
-Needs Node.js 22.5 or newer.
+- `legendary-memory info` prints where your data is and settings to paste into an app by hand.
+- `legendary-memory serve` starts a server on `127.0.0.1:8787` for tools on this computer
+  (the importer, the mirror, the future browser extension). It needs the key `info` prints
+  and refuses requests that are not addressed to localhost.
+
+## Run it on your own server (for phone and web apps)
+
+`legendary-memory host` serves the same memory with a sign-in page, so claude.ai, Claude on
+your phone and ChatGPT can connect. With Docker and a domain name:
 
 ```sh
-cd hub
-npm install
-npm run build:local
-node dist/legendary-memory.mjs info     # prints your data folder and connector settings
+printf 'DOMAIN=memory.example.com\nPASSPHRASE=at-least-twelve-characters\n' > .env
+docker compose up -d
 ```
 
-- **Claude Desktop / Claude Code:** `info` prints the exact lines to paste (a stdio
-  command, no sign-in needed because nothing leaves your computer).
-- **Other local tools** (importer, browser extension): `npm run local` starts a server on
-  `127.0.0.1:8787`. It needs the key `info` prints, and refuses requests that are not
-  addressed to localhost.
+Then add `https://memory.example.com/mcp` as a custom connector. No domain? A tunnel works
+too. Both routes, and running it without Docker, are in [docs/SELF-HOST.md](docs/SELF-HOST.md).
 
-Your memory is `~/.legendary-memory/memory.db`. Back it up by copying that file.
-
-## Host it on Cloudflare (for phone and web apps)
+## Or host it on Cloudflare
 
 You need a free Cloudflare account and Node.js 22 or newer.
 
@@ -153,6 +182,8 @@ like; unchanged notes are left alone, and notes for deleted projects or files ar
   instruction to the AI.
 - This repo holds code only. Your memories live on your computer or in your Cloudflare account, never here.
 - The local HTTP server listens on 127.0.0.1 only, requires a random key, and rejects non-local Host headers.
+- `host` refuses to start without a passphrase of 12+ characters or with a public address
+  that is not https, and counts wrong passphrases by the caller's real address.
 
 ## License
 

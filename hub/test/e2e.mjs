@@ -10,15 +10,27 @@ import { readFileSync } from 'node:fs';
 const BASE = process.env.HUB_URL ?? 'http://localhost:8787';
 const REDIRECT = 'http://localhost:9999/cb';
 
-const vars = Object.fromEntries(
-  readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8')
-    .split('\n')
-    .map((l) => l.match(/^([A-Z_]+)="?(.*?)"?\s*$/))
-    .filter(Boolean)
-    .map((m) => [m[1], m[2]]),
-);
-const PASS = vars.OWNER_PASSPHRASE;
-const BRIDGE = vars.BRIDGE_API_KEY;
+// Secrets come from the environment when set (the host-target test does this), else .dev.vars.
+function devVars() {
+  try {
+    return Object.fromEntries(
+      readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8')
+        .split('\n')
+        .map((l) => l.match(/^([A-Z_]+)="?(.*?)"?\s*$/))
+        .filter(Boolean)
+        .map((m) => [m[1], m[2]]),
+    );
+  } catch {
+    return {};
+  }
+}
+const vars = devVars();
+const PASS = process.env.OWNER_PASSPHRASE ?? vars.OWNER_PASSPHRASE;
+const BRIDGE = process.env.BRIDGE_API_KEY ?? vars.BRIDGE_API_KEY;
+if (!PASS || !BRIDGE) {
+  console.error('Set OWNER_PASSPHRASE and BRIDGE_API_KEY (in .dev.vars or the environment) first.');
+  process.exit(1);
+}
 
 let passed = 0;
 let failed = 0;

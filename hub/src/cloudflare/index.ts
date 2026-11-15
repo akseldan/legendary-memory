@@ -60,7 +60,7 @@ function buildProvider(origin: string, env: Env): OAuthProvider<Env> {
     authorizeEndpoint: '/authorize',
     tokenEndpoint: '/oauth/token',
     clientRegistrationEndpoint: '/oauth/register',
-    clientIdMetadataDocumentEnabled: true,
+    clientIdMetadataDocumentEnabled: env.DISABLE_CIMD !== '1',
     scopesSupported: [SCOPE_READ, SCOPE_WRITE, 'offline_access'],
     requiredScopes: [SCOPE_READ, SCOPE_WRITE],
     resourceMetadata: {

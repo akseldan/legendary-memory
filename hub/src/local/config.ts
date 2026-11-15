@@ -19,3 +19,20 @@ export function apiKey(): string {
   chmodSync(file, 0o600);
   return key;
 }
+
+/** Sign-in state (connected apps, tokens) for the `host` target. Separate from your memory. */
+export const signInDbPath = (): string => join(dataDir(), 'sign-in.db');
+
+export const MIN_PASSPHRASE_LENGTH = 12;
+
+/**
+ * What you type to approve an app when the hub is reachable from the internet (`host`).
+ * Read from LEGENDARY_MEMORY_PASSPHRASE, else from a `passphrase` file in the data folder.
+ * Never generated: you have to be able to type it on the sign-in page.
+ */
+export function passphrase(): string {
+  const fromEnv = process.env.LEGENDARY_MEMORY_PASSPHRASE;
+  if (fromEnv) return fromEnv;
+  const file = join(dataDir(), 'passphrase');
+  return existsSync(file) ? readFileSync(file, 'utf8').trim() : '';
+}

@@ -1,0 +1,36 @@
+{
+  "manifest_version": "0.3",
+  "name": "legendary-memory",
+  "display_name": "Legendary Memory",
+  "version": "0.3.0",
+  "description": "One memory shared across your AI assistants, kept in a file on this computer.",
+  "long_description": "Start a project in one AI app and continue it in another with no re-explaining. Each project has a living brief, session notes and saved files. Everything is stored in one SQLite file in your home folder (~/.legendary-memory); nothing is sent anywhere and no account is needed.",
+  "author": { "name": "akseldan", "url": "https://github.com/akseldan" },
+  "repository": { "type": "git", "url": "https://github.com/akseldan/legendary-memory.git" },
+  "homepage": "https://github.com/akseldan/legendary-memory",
+  "documentation": "https://github.com/akseldan/legendary-memory#readme",
+  "support": "https://github.com/akseldan/legendary-memory/issues",
+  "license": "MIT",
+  "keywords": ["memory", "context", "projects", "local-first", "cross-assistant"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/legendary-memory.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/legendary-memory.mjs", "stdio"]
+    }
+  },
+  "tools": [
+    { "name": "recall", "description": "Load what is known about a project, or an overview of all projects" },
+    { "name": "search", "description": "Keyword search across everything stored" },
+    { "name": "read", "description": "Open one stored item in full" },
+    { "name": "save_checkpoint", "description": "Save where a project stands so any assistant can continue it" },
+    { "name": "save_artifact", "description": "Save a file worth keeping with a project" },
+    { "name": "remember", "description": "Store a lasting fact about you" },
+    { "name": "forget", "description": "Delete one stored item when you ask" }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=22.13.0" }
+  }
+}

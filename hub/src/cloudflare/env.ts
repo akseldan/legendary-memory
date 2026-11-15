@@ -9,6 +9,8 @@ export interface Env {
   OAUTH_PROVIDER: OAuthHelpers;
   PUBLIC_URL?: string;
   ALLOWED_REDIRECT_HOSTS?: string;
+  /** "1" turns off verifying apps by fetching their metadata document (set by the host target). */
+  DISABLE_CIMD?: string;
   /** Secret: what the owner types to approve a connection. */
   OWNER_PASSPHRASE?: string;
   /** Secret: bearer key for /api/* (importer, browser extension). Unset = API off. */

@@ -1,6 +1,6 @@
 # Legendary Memory: plan
 
-Written 2026-11-12. This is the working plan and the handoff document. Whoever picks the
+Updated 2026-11-15. This is the working plan and the handoff document. Whoever picks the
 project up next (a person or an AI) should read "Where things stand" first.
 
 ## Goal
@@ -19,39 +19,177 @@ Requirements, from the owner:
 6. Works on a Mac. Bonus: iPhone and iPad without the Mac being on.
 7. Mainly Claude and ChatGPT (both on the base paid plans). Gemini is optional and must not
    be a dependency, because the owner's Gemini access ends after a one-year student trial.
+8. **Added 2026-11-15: usable by anyone, and sellable.** No second account to create (no
+   "first sign up for Cloudflare"). It should feel like it lives on your computer, or on a
+   server you own.
+
+## The one constraint nothing removes
+
+claude.ai, the Claude phone apps and ChatGPT do not talk to your computer. Their company's
+servers call your memory over the internet, so for those apps the memory needs a public
+https address. That leaves exactly three places a memory can live:
+
+| | Where it lives | Works with | What the user needs |
+|---|---|---|---|
+| **1. Your computer** | One file in your home folder | Desktop apps: Claude Desktop, Claude Code, Cursor, Windsurf, Gemini CLI, other MCP apps | Nothing. No account, no address. |
+| **2. Your own server** | A machine you run (home server, VPS, or your own Cloudflare) | Everything, including phone and web | A way to give it an https address: a domain, or a tunnel |
+| **3. Hosted for you** | A service someone runs (not built yet) | Everything, including phone and web | Signing in to that service, nothing else |
+
+No design gets phone and web apps without one of 2 or 3. So the product is: make each of
+the three as painless as it can be, keep them the same code, and let people move from one
+to the next without losing anything.
+
+## What is sold
+
+The code is MIT and stays free. Options 1 and 2 are free forever; they are also the
+marketing. What can be sold is **option 3, the hosted service** ("Legendary Memory Cloud"):
+people who want their phone and web apps connected and do not want to run a server pay a
+small subscription. This is the usual shape for open-source tools (Obsidian Sync,
+Bitwarden, Plausible).
+
+- Price anchor: MemoryPlugin charges $89 a year (Core) and $180 a year (Pro). Basic
+  Memory is free locally and from $15 a seat per month hosted. A plain $4 to $5 a month or
+  about $40 a year would undercut both.
+- Cost to run: each user is a few megabytes of text and a handful of requests a day. On
+  Cloudflare that is cents per user per month; the real cost is support and responsibility
+  for other people's data.
+- Skill marketplaces (the Agensi email): list the skill in `skills/` for free, for reach.
+  Do not try to sell an open-source skill; anyone can copy it from the repo.
+
+Do not charge anyone until all of these are true:
+
+1. Ten people other than the owner use the free local version for two weeks and still use it.
+2. ChatGPT is proven to work for a normal Plus account (phase 3), or the pitch is honestly
+   "for Claude and coding tools".
+3. The hosted service has: sign-in, per-user isolation, export, delete-my-account, a
+   privacy policy and terms, and a payment provider that handles sales tax (a merchant of
+   record such as Lemon Squeezy, Paddle or Polar).
 
 ## Where things stand
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Hub: storage, tools, sign-in, importer API | **Done. Passes locally: 40 end-to-end checks and 31 unit tests.** |
-| 1b | Restructure: shared core, local (no-account) target, Cloudflare target | **Done 2026-11-12. Cloudflare still 40/40; local target 26 checks.** |
-| 2 | Deploy, connect Claude, test on Mac and iPhone | **Done 2026-11-12. Save and recall work from Claude on Mac and iPhone. Production lockout check and custom instruction still open.** |
-| 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started |
-| 4 | Import existing history from both apps' exports | **Importer written and tested on made-up exports. Not yet run on your real exports.** |
-| 5 | Browser extension for automatic capture on the Mac | Not started |
-| 6 | Dashboard, Obsidian mirror, smarter search | **Obsidian mirror done 2026-11-12 (6 unit tests, run against the local hub). Not yet run on your real vault. Dashboard and search not started.** |
+| 1 | Hub: storage, tools, sign-in, importer API | **Done.** 40 end-to-end checks, 31 unit tests. |
+| 1b | Shared core, local target, Cloudflare target | **Done 2026-11-12.** |
+| 2 | Deploy to the owner's Cloudflare, connect Claude | **Done 2026-11-12.** Works from Claude on Mac and iPhone. Production lockout check still open. |
+| 3 | Connect ChatGPT (web), confirm Plus runs the tools | Not started. **Biggest open risk, see Risks.** |
+| 4 | Import existing history from exports | Importer written and tested on made-up exports. Optional one-time backfill; not run on real exports. |
+| 5 | Browser extension for automatic capture | Not started. Needs the owner present to test. |
+| 6 | Obsidian mirror | Done 2026-11-12. Not yet run on the real vault. |
+| 7 | **One-command install** (`legendary-memory setup`) | **Done 2026-11-15, tested against made-up app folders (18 checks). Not yet tried with the real apps.** |
+| 8 | **Run it on your own server** (`legendary-memory host`, Docker) | **Done 2026-11-15. Passes the same 40-check suite as Cloudflare plus 13 of its own. Docker image not built or run yet. Not yet tried with real Claude or ChatGPT.** |
+| 9 | **One-click Claude Desktop install** (`.mcpb`) | **Bundle builds and validates. Never installed in Claude Desktop.** |
+| 10 | **Skill** (`skills/legendary-memory/SKILL.md`) | **Written. Not yet loaded in an agent.** |
+| 11 | Publish: npm, GitHub release, directories | Not started. Needs the owner's npm account. |
+| 12 | Copy a memory between homes (local, own server, cloud) | Not started |
+| 13 | Dashboard to view, edit and delete memories | Not started |
+| 14 | Hosted service | Design sketch only (below) |
 
-**Next action (needs Daniel at the keyboard): Phase 3, connect ChatGPT. Phase 4's importer and phase 6's Obsidian mirror are ready to try on your real exports and vault.** Phase 1 was run on
-2026-11-12 against `wrangler dev` (local D1 and KV): `npm run typecheck`, `npm test`
-(31 unit tests) and `npm run e2e` (40 checks) all pass. Findings:
+Every suite passes as of 2026-11-15, from `hub/`: `npm run test:all` (types, 31 unit, local
+26, host 13 including the shared 40, setup 18); importer 11 and mirror 6 from the repo root.
+The Cloudflare e2e (`npm run e2e` against `wrangler dev`) was rerun too: 40 of 40. The only
+change to Cloudflare code is one optional setting (`DISABLE_CIMD`), unset there.
 
-- The compatibility date `2026-10-01` was accepted.
-- The MCP SDK loads and serves in the Workers runtime with `CfWorkerJsonSchemaValidator`;
-  no `nodejs_compat` flag and no hand-written handler were needed.
-- Local KV and D1 work without ids in `wrangler.jsonc`.
-- Not covered locally: the sign-in limit is keyed on the `CF-Connecting-IP` header. The test
-  could not show that per-address counting separates different visitors, so re-check the
-  lockout after deploying. Real Claude and ChatGPT sign-in can only be tested after
-  deploying (phases 2 and 3).
+## Next steps, in order
+
+**A. Try the new pieces for real (owner at the Mac, about an hour).**
+Things only a real app can prove, cheapest first:
+
+1. `cd hub && npm install && npm run build:local && node dist/legendary-memory.mjs setup --dry-run`,
+   then without `--dry-run`. Check Claude Desktop and Claude Code list the tools. Note: this
+   local memory is a *separate, empty* memory from the owner's Cloudflare hub. Use it to
+   test the install, then `setup --undo`, or the two will be confused with each other.
+2. `npm run pack:mcpb`, double-click `dist/legendary-memory.mcpb`. Unknown: whether the
+   Node.js inside Claude Desktop is 22.13 or newer. If it is older the extension fails to
+   start with a clear message, and the fix is to ship a small SQLite fallback.
+3. Phase 3: connect ChatGPT to the existing Cloudflare hub. Does a Plus account see the
+   tools, and can it *save*? This decides how ChatGPT is pitched.
+4. `host` behind a tunnel: start a tunnel, start `host --url <tunnel address> --behind-proxy`,
+   add it to Claude as a connector. Proves the own-server path with a real app.
+
+**B. Publish 0.3 (owner, 15 minutes, do this early).**
+Reserve the npm name `legendary-memory` (free on 2026-11-15) by publishing: remove
+`"private": true` in `hub/package.json`, `npm publish`. Until then no instruction anywhere
+says `npx legendary-memory`, because whoever registers the name first controls what that
+command runs. After publishing, the install line for everyone becomes
+`npx legendary-memory setup`. Attach the `.mcpb` to a GitHub release.
+
+**C. Copy a memory between homes (phase 12).**
+`legendary-memory copy --from <hub> --to <hub>` built on the existing `/api/export` and
+`/api/ingest`. This is what makes "start local, add your phone later" real, and it is the
+on-ramp to the hosted service. Also the cure for the owner's own split between local and
+Cloudflare memories.
+
+**D. Automatic capture (phase 5, browser extension).** Unchanged from before. Matters more
+if phase 3 shows ChatGPT Plus cannot save: then the extension is how ChatGPT work gets in.
+
+**E. Dashboard (phase 13).** A page served by `serve` and `host` to read, edit and delete
+what is stored. People will not trust, or pay for, a memory they cannot see.
+
+**F. Hosted beta (phase 14).** Only after A to C. Free, invite-only, ten users.
+
+**G. Charge.** Only after the checklist under "What is sold".
+
+## Hosted service: design sketch
+
+Not built. Written down so the pieces above are shaped to fit it.
+
+- **Isolation: one database per user, not one shared table.** On Cloudflare, a Durable
+  Object per user with its own SQLite storage; the core already talks to a five-method
+  `Db` interface, so this is a third adapter next to D1 and `node:sqlite`. A bug in a query
+  then cannot leak one person's memory to another. (Check current Durable Object SQLite
+  limits and pricing before building.)
+- **Sign-in without a new password:** an emailed link or a passkey. The existing consent
+  page ("which app is asking, allow or deny") stays; the passphrase box becomes the sign-in.
+- **The user's address:** one shared connector address for everyone; the sign-in decides
+  whose memory it is. Nothing personal in the URL.
+- **Promises that have to be true from day one:** export everything (the mirror and
+  `/api/export` already do this), delete the account and all data, never read user content
+  for any purpose, never log it (already the rule in the hub).
+- **A cheaper variant worth considering first: relay only.** The memory stays on the user's
+  computer running `host`; the service only gives it a stable public address and forwards
+  traffic, storing nothing. Much less responsibility, but the computer must be on. Could be
+  the free tier, with hosted storage as the paid one.
+
+## Risks, plainly
+
+1. **ChatGPT may not let Plus accounts save.** OpenAI's own pages disagree on whether
+   personal plans get write tools in Developer mode, and several 2026 write-ups report
+   Plus as read-only or flaky. Custom connectors are web only (no phone app), must be
+   switched on per chat, and are not used by agent mode. If Plus cannot save, ChatGPT
+   becomes "recall works, saving goes through the extension". Test before building more.
+2. **Built-in memory keeps improving.** Claude and Gemini can now import memory from other
+   apps. What they do not do is hold a *project's state* (brief, decisions, next steps,
+   files) that any assistant can pick up. Keep the product about that, not about facts.
+3. **Others are ahead on reach.** MemoryPlugin reports about 8,000 users and covers 20+
+   apps through a browser extension. Basic Memory owns "local Markdown files". Mem0 and
+   Supermemory sell to developers. An opening: none of them lead with cross-assistant
+   project handoff, and one 2026 comparison says Mem0 removed its local server in July
+   (other write-ups still list it, so check before leaning on that).
+4. **Hosting other people's chats is a real responsibility:** a leak would be personal for
+   every user. Local-first keeps most users out of your custody; the relay variant keeps
+   all of them out.
+5. **MIT lets anyone sell hosting of this code.** AGPL (what Basic Memory uses) would make
+   a competitor publish their changes. Changing license is easy now, with one author, and
+   hard later.
+6. **One maintainer.** Web-page layouts (extension) and app config formats (`setup`) change
+   and break things. Keep the surface small.
+
+## Decisions for the owner
+
+- License: stay MIT or move to AGPL before anyone else contributes.
+- Whether to run a hosted service at all, or keep this a free tool (it is already a strong
+  portfolio project for the internship search either way).
+- If hosted: relay-only first, or stored memory first.
+- Reply to Agensi: nothing to do until B is done; then a free listing of the skill.
 
 ## Architecture
 
-### Two targets, one core (restructured 2026-11-12)
+### Three targets, one core
 
 The project is open source, so it cannot require every user to make a Cloudflare account.
 The memory logic therefore sits in `hub/src/core/` and talks to a tiny `Db` interface
-(`prepare/bind/first/all/run/batch`, which is the subset of D1 the store uses). Two thin
+(`prepare/bind/first/all/run/batch`, which is the subset of D1 the store uses). Three thin
 targets plug into it:
 
 - **`src/local/`**: Node 22.5+, `node:sqlite` (built in, no native add-on), one file at
@@ -59,15 +197,36 @@ targets plug into it:
   Code (no auth, nothing leaves the machine) and an HTTP server bound to 127.0.0.1 with a
   random key and a Host-header check, for the importer and extension. Built into one file
   with esbuild (`npm run build:local`).
-- **`src/cloudflare/`**: the Worker, OAuth sign-in page, and D1/KV bindings. Required for
-  claude.ai, Claude mobile and ChatGPT web, which can only reach a public address.
+- **`src/cloudflare/`**: the Worker, OAuth sign-in page, and D1/KV bindings. One way to
+  serve claude.ai, Claude mobile and ChatGPT web, which can only reach a public address.
+- **`host` (in `src/local/host.ts`, added 2026-11-15)**: the other way. It runs the
+  Cloudflare target's request handler unchanged on Node: same sign-in library, same consent
+  page, same routes. Only storage differs: `memory.db` for data and a small SQLite
+  key-value file (`sign-in.db`, `src/local/kv.ts`) where Cloudflare uses KV. Joined at
+  build time by two esbuild aliases (`hub-worker`, and a one-line stand-in for
+  `cloudflare:workers`), so each side keeps its own type-checking. Plain HTTP on
+  127.0.0.1:8787; HTTPS comes from a proxy or tunnel in front. `Dockerfile` and
+  `docker-compose.yml` (with Caddy) are at the repo root; see `docs/SELF-HOST.md`.
 
-Both read the same `migrations/`. Adding another host later (Fly, Docker, a VPS) means
-writing one more target; the core does not change.
+All read the same `migrations/`.
 
-What this cannot do: no zero-account option exists for web ChatGPT or claude.ai, because
-someone must host a public URL. A temporary `cloudflared tunnel --url` needs no account but
-the address changes every run, so it suits testing only.
+Differences in `host`, on purpose:
+
+- Apps are not verified by fetching their metadata document (CIMD is off). That fetch is
+  only safe where outbound requests cannot reach private addresses, which Cloudflare
+  guarantees and a home network does not. Apps register themselves instead, limited to the
+  allowed redirect hosts. To confirm with real Claude and ChatGPT.
+- The address used for the wrong-passphrase limit is the connection's own address, or the
+  last `X-Forwarded-For` entry with `--behind-proxy`. A caller cannot choose it.
+- It will not start without a 12+ character passphrase, or with a public `http://` address.
+
+`setup` (`src/local/setup.ts`): copies the bundle to `~/.legendary-memory/bin/` and adds a
+`legendary-memory` entry to the config of each installed app (Claude Desktop, Cursor,
+Windsurf, Gemini CLI by JSON file; Claude Code through its own `claude mcp add`). It only
+touches installed apps, keeps everything else in the file, saves a
+`.before-legendary-memory` copy, leaves files it cannot parse alone, and has `--dry-run`
+and `--undo`. It writes the full path of the Node binary, because apps started from the
+Dock do not see a shell's PATH.
 
 Behavioral notes: the core's search uses FTS5, present in both D1 and `node:sqlite`.
 `crypto.subtle.timingSafeEqual` (Workers only) was replaced with a portable comparison.
@@ -200,7 +359,7 @@ Run from `hub/`. A `.dev.vars` file with local-only values is needed (copy
 - Left to itself, Claude may answer "recall the X project" by searching past chats instead of
   calling the hub. Naming the tool, or the custom instruction in the README, fixes it.
 
-## Later phases
+## Phase notes (details for phases 2 to 6, written 2026-11-12)
 
 **Phase 2: deploy and connect Claude.** Steps are in the README. Add to Claude's custom
 instructions: "Use Legendary Memory: recall a project before working on it and save a

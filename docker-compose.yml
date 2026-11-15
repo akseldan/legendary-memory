@@ -1,0 +1,30 @@
+# Legendary Memory plus Caddy, which fetches and renews the HTTPS certificate by itself.
+# You need a domain name pointing at this server, and ports 80 and 443 open.
+#
+#   1. Create a file named .env next to this one:
+#        DOMAIN=memory.example.com
+#        PASSPHRASE=at-least-twelve-characters
+#   2. docker compose up -d
+#   3. Add https://memory.example.com/mcp as a custom connector in Claude or ChatGPT.
+services:
+  memory:
+    build: .
+    restart: unless-stopped
+    environment:
+      LEGENDARY_MEMORY_URL: https://${DOMAIN:?set DOMAIN in .env}
+      LEGENDARY_MEMORY_PASSPHRASE: ${PASSPHRASE:?set PASSPHRASE in .env}
+    volumes:
+      - memory-data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [memory]
+    ports: ['80:80', '443:443']
+    command: caddy reverse-proxy --from ${DOMAIN} --to memory:8787
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  memory-data:
+  caddy-data:

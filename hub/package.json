@@ -1,8 +1,8 @@
 {
-  "name": "legendary-memory-hub",
-  "version": "0.2.0",
+  "name": "legendary-memory",
+  "version": "0.3.0",
   "private": true,
-  "description": "The memory hub: shared memory for ChatGPT, Claude and other MCP clients. Runs locally with no account, or on Cloudflare.",
+  "description": "One memory shared across your AI assistants (Claude, ChatGPT, Cursor and other MCP apps). Runs on your own computer with no account, on your own server, or on Cloudflare.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -13,28 +13,47 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.local.json",
     "test": "vitest run",
     "e2e": "node test/e2e.mjs",
-    "build:local": "esbuild src/local/cli.ts --bundle --platform=node --target=node22 --format=esm --loader:.sql=text --external:node:sqlite --outfile=dist/legendary-memory.mjs",
+    "build:local": "esbuild src/local/cli.ts --bundle --platform=node --target=node22 --format=esm --loader:.sql=text --external:node:sqlite --alias:hub-worker=./src/cloudflare/index.ts --alias:cloudflare:workers=./src/local/cf-shim.ts --outfile=dist/legendary-memory.mjs",
     "local": "npm run build:local && node dist/legendary-memory.mjs serve",
-    "test:local": "npm run build:local && node test/local.mjs"
-  },
-  "dependencies": {
-    "@cfworker/json-schema": "^4.1.6",
-    "@cloudflare/workers-oauth-provider": "^1.2.4",
-    "@modelcontextprotocol/sdk": "^1.32.2",
-    "zod": "^4.6.7"
+    "test:local": "npm run build:local && node test/local.mjs",
+    "test:host": "npm run build:local && node test/host.mjs",
+    "test:setup": "npm run build:local && node test/setup.mjs",
+    "pack:mcpb": "npm run build:local && node ../packaging/mcpb/pack.mjs",
+    "test:all": "npm run typecheck && vitest run && npm run build:local && node test/local.mjs && node test/host.mjs && node test/setup.mjs",
+    "prepublishOnly": "npm run test:all"
   },
   "devDependencies": {
+    "@cfworker/json-schema": "^4.1.6",
+    "@cloudflare/workers-oauth-provider": "^1.2.4",
     "@cloudflare/workers-types": "^5.20261112.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/node": "^22.20.5",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0",
-    "wrangler": "^4.161.0"
+    "wrangler": "^4.161.0",
+    "zod": "^4.6.7"
   },
   "bin": {
     "legendary-memory": "dist/legendary-memory.mjs"
   },
   "engines": {
-    "node": ">=22.5"
-  }
+    "node": ">=22.13"
+  },
+  "files": [
+    "dist/legendary-memory.mjs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akseldan/legendary-memory.git",
+    "directory": "hub"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "claude",
+    "chatgpt",
+    "local-first",
+    "ai-memory"
+  ]
 }
