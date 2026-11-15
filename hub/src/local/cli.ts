@@ -19,6 +19,7 @@ import { SCOPE_READ, SCOPE_WRITE, VERSION } from '../core/constants';
 import { buildServer } from '../core/mcp';
 import { MIN_PASSPHRASE_LENGTH, apiKey, dataDir, dbPath, passphrase, signInDbPath } from './config';
 import { startServer } from './server';
+import { bearerAuthorizer } from './ui';
 import { defaultRunner, formatResults, installBundle, runSetup } from './setup';
 import { loadSqlite, openDatabase } from './sqlite';
 import welcomeHtml from './ui/welcome.html';
@@ -70,7 +71,7 @@ async function main(): Promise<void> {
       const self = process.argv[1] ?? '';
       const token = randomBytes(24).toString('hex');
       const ui = {
-        token,
+        authorize: bearerAuthorizer(token),
         html: welcomeHtml,
         dataFile: dbPath(),
         setup: (run: { dryRun: boolean; undo: boolean; only?: string[] }) =>
@@ -166,6 +167,7 @@ async function main(): Promise<void> {
         bind,
         publicUrl: origin.origin,
         passphrase: secret,
+        html: welcomeHtml,
         apiKey: apiKey(),
         allowedRedirectHosts: process.env.LEGENDARY_MEMORY_REDIRECT_HOSTS ?? 'claude.ai,claude.com,chatgpt.com,localhost,127.0.0.1',
         behindProxy: has('--behind-proxy') || process.env.LEGENDARY_MEMORY_BEHIND_PROXY === '1',

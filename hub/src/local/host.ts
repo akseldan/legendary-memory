@@ -13,6 +13,7 @@ import { Readable } from 'node:stream';
 import worker from 'hub-worker';
 import type { Db } from '../core/db';
 import type { SqliteKv } from './kv';
+import { hostUi } from './ui-session';
 
 export interface HostOptions {
   port: number;
@@ -23,6 +24,8 @@ export interface HostOptions {
   passphrase: string;
   /** Key for /api/* (importer, mirror, browser extension). */
   apiKey: string;
+  /** The welcome page, served at / with a passphrase sign-in for the memory view. */
+  html: string;
   /** Hosts an AI app may send the sign-in result back to. */
   allowedRedirectHosts: string;
   /** True when a reverse proxy or tunnel on this machine forwards the requests. */
@@ -87,6 +90,8 @@ export function startHost(db: Db, kv: SqliteKv, options: HostOptions): Promise<S
     DISABLE_CIMD: '1',
   };
 
+  const memoryView = hostUi({ db, kv, passphrase: options.passphrase, origin, html: options.html });
+
   const server = createServer(async (req, res) => {
     const fail = (status: number, body: string) => {
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -118,7 +123,8 @@ export function startHost(db: Db, kv: SqliteKv, options: HostOptions): Promise<S
         waitUntil: (work: Promise<unknown>) => void pending.push(Promise.resolve(work).catch(() => undefined)),
         passThroughOnException: () => undefined,
       };
-      const response = await worker.fetch(request, { ...env }, ctx);
+      // The page and its /ui/ endpoints are answered here, before the sign-in library or the API see the request.
+      const response = (await memoryView(request)) ?? (await worker.fetch(request, { ...env }, ctx));
 
       const out: Record<string, string | string[]> = {};
       response.headers.forEach((value, name) => {

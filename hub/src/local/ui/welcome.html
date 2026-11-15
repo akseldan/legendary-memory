@@ -182,6 +182,9 @@
   .search input { min-height: 48px; padding: 0 18px; }
   .inside textarea { min-height: 9rem; padding: 14px 16px; resize: vertical; line-height: 1.5; }
   .search input:focus-visible, .inside textarea:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
+  .login { max-width: 22rem; margin: 26px auto 0; display: grid; gap: 14px; text-align: center; }
+  .login input { min-height: 48px; padding: 0 18px; border-radius: 14px; border: 1.5px solid var(--line-strong); background: color-mix(in srgb, var(--card) 90%, transparent); color: var(--ink); font: inherit; }
+  .login input:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
   .hit { padding: 12px 16px; border-radius: 14px; border: 1.5px solid var(--line); color: var(--soft); }
   .hit b { color: var(--ink); }
   .hit p { margin: 4px 0 0; overflow-wrap: anywhere; }
@@ -333,9 +336,17 @@
     <!-- Locked -->
     <section class="step" data-step="locked" hidden>
       <h1 class="mid" tabindex="-1">This page is locked</h1>
-      <p class="lede">Open it with the address the program printed in Terminal, the one that ends in <code>#t=…</code>. It carries a one-time key, so no one else on this computer can open it.</p>
-      <div class="field"><span>legendary-memory start</span></div>
-      <p class="small">Run that command to get a fresh address.</p>
+      <div id="locallock">
+        <p class="lede">Open it with the address the program printed in Terminal, the one that ends in <code>#t=…</code>. It carries a one-time key, so no one else on this computer can open it.</p>
+        <div class="field"><span>legendary-memory start</span></div>
+        <p class="small">Run that command to get a fresh address.</p>
+      </div>
+      <form class="login" id="login" hidden>
+        <p class="lede">Type the passphrase you set for this server.</p>
+        <input id="pass" type="password" autocomplete="current-password" aria-label="Passphrase" required>
+        <button class="go" type="submit">Open my memory</button>
+        <p class="small danger" id="login-note" role="alert"></p>
+      </form>
     </section>
 
     <!-- Your memory -->
@@ -354,18 +365,18 @@
       <div class="block">
         <h2>When you're ready</h2>
         <ul class="stack">
-          <li><details><summary>Use it from your phone or ChatGPT on the web</summary>
+          <li id="phone-item"><details><summary>Use it from your phone or ChatGPT on the web</summary>
             <div class="inside"><p>Phone and web apps can only reach a public https address, so they need a hub that lives on the internet: your own Cloudflare hub, or this program running behind a tunnel. The steps are in <code>docs/SELF-HOST.md</code>.</p></div></details></li>
           <li><details><summary>Make it a habit</summary>
             <div class="inside"><p>Paste this into each app's custom instructions so it recalls and saves on its own.</p>
               <div class="field"><span id="say-habit">Use Legendary Memory: recall a project before working on it and save a checkpoint when we finish a session.</span><button type="button" data-copy="say-habit">Copy</button></div></div></details></li>
-          <li><details><summary>Undo everything</summary>
+          <li id="undo-item"><details><summary>Undo everything</summary>
             <div class="inside"><p>This removes the connection from each app and restores the settings as they were.</p>
               <div class="field"><span id="say-undo">node ~/.legendary-memory/bin/legendary-memory.mjs setup --undo</span><button type="button" data-copy="say-undo">Copy</button></div></div></details></li>
         </ul>
       </div>
       <p class="where" id="where"></p>
-      <div class="actions"><button class="quiet" id="again" type="button">Run setup again</button></div>
+      <div class="actions"><button class="quiet" id="again" type="button">Run setup again</button><button class="quiet" id="signout" type="button" hidden>Sign out</button></div>
     </section>
   </main>
   <footer class="bottom" id="bottom"></footer>
@@ -383,7 +394,10 @@
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---- where the data comes from: the local hub, or made-up data when this is only a preview
-  const local = /^https?:$/.test(location.protocol) && ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+  // A hosted server marks the page; it asks for the passphrase and uses a cookie instead of a key in the address.
+  const host = document.documentElement.dataset.mode === 'host';
+  let csrf = '';
+  const local = !host && /^https?:$/.test(location.protocol) && ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
   let token = '';
   if (local) {
     const fromHash = new URLSearchParams(location.hash.slice(1)).get('t');
@@ -393,7 +407,7 @@
     } catch { token = fromHash || ''; }
     if (fromHash) history.replaceState(null, '', location.pathname);
   }
-  const demo = !local;
+  const demo = !local && !host;
 
   const fake = {
     apps: [
@@ -432,7 +446,8 @@
     }
     const res = await fetch(path, {
       method: body ? 'POST' : 'GET',
-      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      credentials: 'same-origin',
+      headers: { ...(host ? (csrf ? { 'X-LM-CSRF': csrf } : {}) : { Authorization: `Bearer ${token}` }), ...(body ? { 'Content-Type': 'application/json' } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     if (res.status === 401) throw new Error('locked');
@@ -725,12 +740,40 @@
 
   function fail(error) {
     if (error.message === 'locked') return show('locked');
-    $('where').textContent = `Could not reach the local program. Is "legendary-memory start" still running? (${error.message})`;
+    $('where').textContent = host ? `Could not reach the server. (${error.message})` : `Could not reach the local program. Is "legendary-memory start" still running? (${error.message})`;
   }
 
   // ---- start
   $('note').hidden = !demo;
-  if (local && !token) show('locked');
+  if (host) {
+    $('locallock').hidden = true;
+    $('login').hidden = false;
+    for (const id of ['again', 'phone-item', 'undo-item']) $(id).hidden = true;
+    $('signout').hidden = false;
+    for (const step of document.querySelectorAll('.step')) step.hidden = true;
+    $('login').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const note = $('login-note');
+      note.textContent = '';
+      try {
+        const res = await fetch('/ui/login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ passphrase: $('pass').value }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { note.textContent = data.error || `The server answered ${res.status}.`; return; }
+        csrf = data.csrf;
+        $('pass').value = '';
+        show('done');
+      } catch (error) { note.textContent = `Could not reach the server. (${error.message})`; }
+    });
+    $('signout').addEventListener('click', async () => {
+      try { await api('/ui/logout', {}); } catch {}
+      csrf = '';
+      show('locked');
+    });
+    fetch('/ui/session', { credentials: 'same-origin' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((session) => { if (session) { csrf = session.csrf; show('done'); } else show('locked'); })
+      .catch(() => show('locked'));
+  } else if (local && !token) show('locked');
   else {
     let returning = false;
     try { returning = localStorage.getItem('lm-onboarded') === '1'; } catch {}

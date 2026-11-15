@@ -12,12 +12,12 @@ import * as store from '../core/store';
 import type { SetupResult } from './setup';
 
 export interface UiOptions {
-  /** Key for /ui/*, created fresh on every `start`. */
-  token: string;
+  /** Decides whether a /ui/ request may go on: null means yes, otherwise the answer to send back. */
+  authorize: (request: Request) => Response | null | Promise<Response | null>;
   html: string;
   dataFile: string;
-  /** Looks at, connects or disconnects the AI apps on this computer. */
-  setup: (run: { dryRun: boolean; undo: boolean; only?: string[] }) => SetupResult[];
+  /** Looks at, connects or disconnects the AI apps on this computer. Absent on a hosted server, where those routes do not exist. */
+  setup?: (run: { dryRun: boolean; undo: boolean; only?: string[] }) => SetupResult[];
 }
 
 /** Same ceiling as the save_checkpoint tool's brief. */
@@ -44,6 +44,12 @@ function keyOk(request: Request, token: string): boolean {
   const expected = Buffer.from(token);
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
+
+/** The key `start` creates fresh each time and puts in the address it opens. */
+export const bearerAuthorizer =
+  (token: string) =>
+  (request: Request): Response | null =>
+    keyOk(request, token) ? null : json({ error: 'locked' }, 401);
 
 /** What a look (dry run) at the apps says about each one. */
 function appStates(results: SetupResult[]): AppState[] {
@@ -100,10 +106,13 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
   // A web page on another site must not be able to drive this, even if it guessed the key.
   const origin = request.headers.get('origin');
   if (origin && origin !== url.origin) return json({ error: 'forbidden' }, 403);
-  if (!keyOk(request, ui.token)) return json({ error: 'locked' }, 401);
+  const denied = await ui.authorize(request);
+  if (denied) return denied;
 
   const route = `${request.method} ${url.pathname}`;
-  if (route === 'GET /ui/apps') return json({ apps: appStates(ui.setup({ dryRun: true, undo: false })) });
+  const setup = ui.setup;
+  if (!setup && /^(GET \/ui\/apps|POST \/ui\/(connect|disconnect))$/.test(route)) return json({ error: 'not found' }, 404);
+  if (setup && route === 'GET /ui/apps') return json({ apps: appStates(setup({ dryRun: true, undo: false })) });
   if (route === 'GET /ui/memory') return json(await memorySummary(db, ui.dataFile));
   if (route === 'GET /ui/search') {
     const [hits, projects] = await Promise.all([store.search(db, url.searchParams.get('q') ?? '', { limit: 10 }), store.listProjects(db)]);
@@ -124,13 +133,13 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
     if ((body.kind !== 'project' && body.kind !== 'checkpoint') || typeof body.id !== 'string') return json({ error: 'bad request' }, 400);
     return (await store.forget(db, body.kind, body.id)) ? json({ ok: true }) : json({ error: 'not found' }, 404);
   }
-  if (route === 'POST /ui/connect' || route === 'POST /ui/disconnect') {
+  if (setup && (route === 'POST /ui/connect' || route === 'POST /ui/disconnect')) {
     const body = (await request.json().catch(() => ({}))) as { only?: unknown };
     const only = Array.isArray(body.only) ? body.only.filter((name): name is string => typeof name === 'string') : undefined;
-    const done = ui.setup({ dryRun: false, undo: route.endsWith('disconnect'), only });
+    const done = setup({ dryRun: false, undo: route.endsWith('disconnect'), only });
     // Report the real state afterwards, keeping the reason for anything that went wrong.
     const problems = new Map(done.filter((r) => r.status === 'failed').map((r) => [r.app, r.detail]));
-    const apps = appStates(ui.setup({ dryRun: true, undo: false })).map((a) =>
+    const apps = appStates(setup({ dryRun: true, undo: false })).map((a) =>
       problems.has(a.app) ? { app: a.app, status: 'problem' as const, detail: problems.get(a.app) } : a,
     );
     return json({ apps });

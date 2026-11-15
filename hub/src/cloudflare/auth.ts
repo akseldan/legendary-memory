@@ -6,15 +6,12 @@
  */
 import { AuthorizationError, CimdFetchError, type ConsentDescription } from '@cloudflare/workers-oauth-provider';
 import { type ConnectionProps, type Env, SCOPE_READ, SCOPE_WRITE } from './env';
+import { recordFailure, sameSecret, tooManyFailures } from '../core/lockout';
 import { escapeHtml } from '../core/text';
 
 const OWNER_ID = 'owner';
 const MIN_PASSPHRASE_LENGTH = 12;
 
-/** Wrong-passphrase limits per 15 minutes, per address and overall. */
-const WINDOW_SECONDS = 15 * 60;
-const MAX_FAILURES_PER_ADDRESS = 5;
-const MAX_FAILURES_TOTAL = 40;
 
 const SCOPE_LABELS: Record<string, string> = {
   [SCOPE_READ]: 'Read your memory',
@@ -108,35 +105,6 @@ ${local}
 </form>`;
 }
 
-/** Compares two secrets without leaking, through timing, how much of them matched. */
-async function sameSecret(a: string, b: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const [left, right] = await Promise.all([
-    crypto.subtle.digest('SHA-256', encoder.encode(a)),
-    crypto.subtle.digest('SHA-256', encoder.encode(b)),
-  ]);
-  return crypto.subtle.timingSafeEqual(left, right);
-}
-
-const failureKeys = (request: Request): [string, string] => [
-  `lm:login-fail:${request.headers.get('CF-Connecting-IP') ?? 'unknown'}`,
-  'lm:login-fail:all',
-];
-
-async function tooManyFailures(env: Env, request: Request): Promise<boolean> {
-  const [perAddress, total] = await Promise.all(failureKeys(request).map((key) => env.OAUTH_KV.get(key)));
-  return Number(perAddress ?? 0) >= MAX_FAILURES_PER_ADDRESS || Number(total ?? 0) >= MAX_FAILURES_TOTAL;
-}
-
-async function recordFailure(env: Env, request: Request): Promise<void> {
-  await Promise.all(
-    failureKeys(request).map(async (key) => {
-      const count = Number((await env.OAUTH_KV.get(key)) ?? 0) + 1;
-      await env.OAUTH_KV.put(key, String(count), { expirationTtl: WINDOW_SECONDS });
-    }),
-  );
-}
-
 export async function handleAuthorize(request: Request, env: Env): Promise<Response> {
   const passphrase = env.OWNER_PASSPHRASE ?? '';
   if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
@@ -164,11 +132,11 @@ export async function handleAuthorize(request: Request, env: Env): Promise<Respo
       return new Response(null, { status: 302, headers: denied.headers });
     }
 
-    if (await tooManyFailures(env, request)) {
+    if (await tooManyFailures(env.OAUTH_KV, request)) {
       return message('Too many attempts', 'Sign-in is paused for 15 minutes after repeated wrong passphrases. Try again later.', 429);
     }
     if (!(await sameSecret(String(form.get('passphrase') ?? ''), passphrase))) {
-      await recordFailure(env, request);
+      await recordFailure(env.OAUTH_KV, request);
       // The page's handle is still unused, so going back and retrying works.
       return message('Wrong passphrase', 'That passphrase is not right. Go back and try again.', 401);
     }

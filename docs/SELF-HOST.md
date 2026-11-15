@@ -91,3 +91,12 @@ themselves by registering, not by a metadata document the server would have to f
 (that fetch is unsafe on a home network), and the wrong-passphrase limit (five tries per
 address, forty overall, per fifteen minutes) uses the connection's address or, with
 `--behind-proxy`, the address your proxy reports.
+
+## See and edit your memory in the browser
+
+Open your server's address (the same one apps use, without `/mcp`) in a browser and type the
+passphrase you set. You get the same page as `legendary-memory start`: your projects, a search
+box, and the options to edit a brief or delete a project or session. The passphrase gives you a
+cookie that lasts 12 hours, lives only in that browser, and ends when you sign out or change the
+passphrase. Five wrong passphrases from one address lock sign-in for fifteen minutes (this
+counter is shared with the app sign-in page). The page never accepts the API key or an app's token.
