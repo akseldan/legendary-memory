@@ -46,7 +46,7 @@ const text = (r) => r?.content?.map((c) => c.text).join('\n') ?? '';
 
 try {
   console.log('HTTP target');
-  check('server starts', (await fetch(`${BASE}/api/health`)).ok, serverErr);
+  check('server starts', await fetch(`${BASE}/api/health`).then((r) => r.ok, () => false), serverErr);
   check('no key -> 401', (await mcp('tools/list', {}, '')).res.status === 401);
   check('wrong key -> 401', (await mcp('tools/list', {}, 'x'.repeat(40))).res.status === 401);
   const hostStatus = (host) => new Promise((resolve) => {
