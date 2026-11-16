@@ -117,7 +117,7 @@ too. Both routes, and running it without Docker, are in [docs/SELF-HOST.md](docs
 
 ## Or host it on Cloudflare
 
-You need a free Cloudflare account and Node.js 22 or newer.
+You need a free Cloudflare account and Node.js 22.20 or newer.
 
 ```sh
 cd hub

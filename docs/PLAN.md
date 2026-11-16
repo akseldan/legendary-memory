@@ -214,7 +214,7 @@ The memory logic therefore sits in `hub/src/core/` and talks to a tiny `Db` inte
 (`prepare/bind/first/all/run/batch`, which is the subset of D1 the store uses). Three thin
 targets plug into it:
 
-- **`src/local/`**: Node 22.5+, `node:sqlite` (built in, no native add-on), one file at
+- **`src/local/`**: Node 22.20+, `node:sqlite` (built in, no native add-on), one file at
   `~/.legendary-memory/memory.db`. Entry points: stdio MCP for Claude Desktop and Claude
   Code (no auth, nothing leaves the machine) and an HTTP server bound to 127.0.0.1 with a
   random key and a Host-header check, for the importer and extension. Built into one file
