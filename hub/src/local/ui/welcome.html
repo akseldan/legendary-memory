@@ -663,6 +663,7 @@
       const c = memory.counts;
       $('counts').textContent = [count(c.projects, 'project', 'projects'), count(c.sessions, 'session', 'sessions'), count(c.files, 'saved file', 'saved files'), count(c.facts, 'fact about you', 'facts about you')].join(', ');
       $('where').textContent = `Kept in ${memory.dataFile}`;
+      if (memory.undoCommand) $('say-undo').textContent = memory.undoCommand;
       $('empty').hidden = memory.projects.length > 0;
       const open = new Set([...document.querySelectorAll('#projects details[open]')].map((d) => d.dataset.id));
       $('projects').replaceChildren(...memory.projects.map((p) => projectItem(p, open.has(p.id))));

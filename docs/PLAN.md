@@ -84,10 +84,11 @@ Do not charge anyone until all of these are true:
 | 12 | Copy a memory between homes (local, own server, cloud) | **Done 2026-11-15** as `legendary-memory copy --from <hub> --to <hub>`: report only until `--apply`, additive, safe to repeat, keeps ids and dates, re-redacts on the way in, keys from the environment or a hidden prompt. Needs a new server endpoint (`POST /api/import`), so a destination already deployed must be updated first (the owner's Cloudflare hub is not yet). 37 checks across local, own-server and .db-file targets. Not run against D1 (batch and size limits unverified). |
 | 13 | **Welcome page and "your memory" view** (`legendary-memory start`) | **Done 2026-11-15: guided setup in the browser, live wait for the first checkpoint, read-only list of projects. 17 endpoint checks plus a full click-through in a headless browser. Not yet opened on a real Mac. Search, editing a brief and deleting a project or session were added 2026-11-15 (37 endpoint checks, clicked through in Chrome on sample data). Served from `host` too since 2026-11-15: open the server's address, type the owner passphrase, get a cookie session (45 checks plus a real-browser sign-in, reload and sign-out). Not on the Cloudflare Worker.** |
 | 14 | Hosted service | Design sketch only (below) |
+| 15 | **Installer with no prerequisites** (`site/install.sh`, `curl … \| sh`) | **Done 2026-11-17 on a branch.** Downloads a private Node.js 24.22.3 (pinned SHA-256, signature of SHASUMS256.txt checked against the Node.js release keys) and the release's `legendary-memory.mjs` (checked against `SHA256SUMS`) into `~/.legendary-memory`; adds a `legendary-memory` command with `update` and `uninstall`; apps are pointed at the private Node.js, so upgrading or removing another Node.js cannot break them. 44 checks (`test/install.mjs`) with a stand-in for nodejs.org and the release, plus one real download from nodejs.org on Linux. Not yet run on a Mac. Needs a release with `legendary-memory.mjs` and `SHA256SUMS`, which `.github/workflows/release.yml` builds when a `v*` tag is pushed. No Windows installer yet. |
 
-Every suite passes as of 2026-11-15, from `hub/`: `npm run test:all` (types, 31 unit, local
-26, host 13 including the shared 40, setup 20, welcome page 17); importer 11 and mirror 6
-from the repo root.
+Every suite passes as of 2026-11-17, from `hub/`: `npm run test:all` (types, 31 unit, local
+29, host 13 including the shared 40, setup 32, welcome page 40, copy 37, host page 45, db 6,
+installer 44); importer 11 and mirror 6 from the repo root.
 The Cloudflare e2e (`npm run e2e` against `wrangler dev`) was rerun too: 40 of 40. The only
 change to Cloudflare code is one optional setting (`DISABLE_CIMD`), unset there.
 

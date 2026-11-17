@@ -13,19 +13,20 @@ One memory shared across your AI assistants. Start a project in ChatGPT, then te
 It is a small program you own. Run it on your own computer with no account at all, on a
 server of your own, or on Cloudflare's free plan. Your data stays with you in every case.
 
-> **Status (1.0.2, November 2026):** the Cloudflare version is in daily use with Claude on
+> **Status (1.1.0, November 2026):** the Cloudflare version is in daily use with Claude on
 > Mac and iPhone and works with ChatGPT. The local install is tested with Claude Desktop
 > and Claude Code on a Mac. The run-it-on-your-own-server version and the other apps
 > (Cursor, Windsurf, Gemini CLI, Codex) pass their automated tests but have not been tried
-> with the real apps, and the Docker image has not been built yet. The package is not on
-> npm yet. See [docs/PLAN.md](docs/PLAN.md).
+> with the real apps, and the Docker image has not been built yet. The one-command installer
+> is tested on Linux, including a real Node.js download, but has not yet been tried on a
+> Mac. The package is not on npm yet. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Pick where your memory lives
 
 | | Your computer | Your own server | Your Cloudflare account |
 |---|---|---|---|
 | Account needed | None | None (a domain or a tunnel for the address) | Free Cloudflare account |
-| Setup | `npm start`, then follow the page | `docker compose up -d` | `wrangler deploy` |
+| Setup | One Terminal command (below), then follow the page | `docker compose up -d` | `wrangler deploy` |
 | Claude Desktop, Claude Code, Codex, Cursor, Windsurf, Gemini CLI | Yes | Yes | Yes |
 | claude.ai, Claude on iPhone/iPad, ChatGPT (web) | No | Yes | Yes |
 | Works with your computer off | No | Yes, if the server is on | Yes |
@@ -37,14 +38,27 @@ memory logic is the same code in all three.
 
 ## Quick start: on your computer, no account
 
-Needs [Node.js](https://nodejs.org) 22.20 or newer.
+On a Mac or Linux, paste this into Terminal. Nothing needs to be installed first:
+
+```sh
+curl -fsSL https://akseldan.github.io/legendary-memory/install.sh | sh
+```
+
+It puts everything in `~/.legendary-memory`: its own copy of Node.js (checked against a
+pinned SHA-256, and separate from any Node.js you have) and the program (checked against the
+release's `SHA256SUMS`). It adds `legendary-memory` to your PATH, then opens the welcome page.
+It never uses sudo, never touches your memory file, and changes no app until you click Connect.
+Add `-s -- --dry-run` after `sh` to see the plan first. Later, `legendary-memory update` updates
+it and `legendary-memory uninstall` disconnects every app and removes it; your memory stays.
+
+From source instead (needs [Node.js](https://nodejs.org) 22.20 or newer):
 
 ```sh
 git clone https://github.com/akseldan/legendary-memory && cd legendary-memory/hub
 npm install && npm start
 ```
 
-That opens a welcome page in your browser. It finds the AI apps on this computer (Claude
+Either way, a welcome page opens in your browser. It finds the AI apps on this computer (Claude
 Desktop, Claude Code, Codex, Cursor, Windsurf, Gemini CLI), connects the ones you pick, waits with
 you for your first saved checkpoint, and afterwards shows what is in your memory. The page
 is served by the program on your own computer and only opens with the one-time key in the

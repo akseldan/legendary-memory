@@ -41,6 +41,10 @@
   .go { display: inline-flex; align-items: center; justify-content: center; min-height: 56px; padding: 0 36px; margin-top: 32px; border-radius: 16px; background: var(--ink); color: var(--on-ink); font-weight: 650; font-size: 1.0625rem; text-decoration: none; box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--ink) 70%, transparent); }
   .go:hover { transform: translateY(-1px); }
   .fine { margin-top: 12px; color: var(--soft); font-size: 0.9375rem; }
+  .alt { margin: 22px auto 0; max-width: 34rem; color: var(--soft); font-size: 0.9375rem; }
+  .cmdrow { display: flex; gap: 8px; justify-content: center; align-items: stretch; max-width: 46rem; margin: 10px auto 0; }
+  .cmd { flex: 1; text-align: left; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 7%, var(--card)); border: 1.5px solid var(--line); overflow-wrap: anywhere; user-select: all; font-size: 0.875rem; }
+  .copy { flex: none; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--line-strong); background: var(--card); color: var(--ink); font: 650 0.875rem var(--body); cursor: pointer; }
   .chips { margin: 26px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .chips li { padding: 8px 16px; border-radius: 999px; background: var(--glow); color: #fff; font: 650 0.9375rem/1 var(--body); box-shadow: 0 6px 22px -4px color-mix(in srgb, var(--glow) 65%, transparent); }
   @media (prefers-color-scheme: dark) { .chips li { color: #0f1020; } }
@@ -95,6 +99,8 @@
     <p class="lede">Start a project in one app. Say <b>recall it</b> in another. Nothing to explain twice.</p>
     <a class="go" href="https://github.com/akseldan/legendary-memory/releases/latest/download/legendary-memory.mcpb">Download for Claude Desktop</a>
     <p class="fine">Free. About 0.4 MB. Tested on a Mac with Claude Desktop.</p>
+    <p class="alt">Also use Claude Code, Codex or Cursor? On a Mac or Linux, paste this into Terminal instead. It brings everything it needs and asks before connecting any app.</p>
+    <div class="cmdrow"><code class="cmd" id="cmd">curl -fsSL https://akseldan.github.io/legendary-memory/install.sh | sh</code><button class="copy" type="button" id="copy">Copy</button></div>
     <ul class="chips" aria-label="What to know first">
       <li>Free and open source</li>
       <li>Stays on this computer</li>
@@ -162,9 +168,9 @@
       <details><summary>Where does my memory live?</summary>
         <p>In one file on your computer, <code>~/.legendary-memory/memory.db</code>. Nothing is sent anywhere and there is no account. Back it up by copying the file.</p></details>
       <details><summary>Which apps does it work with?</summary>
-        <p>Claude Desktop, with this download. Claude Code, Codex, Cursor, Windsurf and Gemini CLI connect through a one-command setup from the GitHub page. Claude on the web and phone, and ChatGPT, need a version that lives on the internet, which you run yourself on Cloudflare's free plan; the steps are on GitHub.</p></details>
+        <p>Claude Desktop, with this download. Claude Code, Codex, Cursor, Windsurf and Gemini CLI connect through the Terminal command above (Mac and Linux; it brings its own copy of Node.js). Claude on the web and phone, and ChatGPT, need a version that lives on the internet, which you run yourself on Cloudflare's free plan; the steps are on GitHub.</p></details>
       <details><summary>How do I remove it?</summary>
-        <p>Open Claude Desktop, go to Settings, then Extensions, and remove Legendary Memory. Your saved memory file stays until you delete it.</p></details>
+        <p>Open Claude Desktop, go to Settings, then Extensions, and remove Legendary Memory. If you used the Terminal command, run <code>legendary-memory uninstall</code>; it disconnects every app and puts their settings back. Your saved memory file stays until you delete it.</p></details>
       <details><summary>Can I see or delete what it saved?</summary>
         <p>Yes. Ask any connected assistant to show or forget something, or run the welcome page from the GitHub project to browse, edit and delete your projects.</p></details>
       <details><summary>Is it finished?</summary>
@@ -177,5 +183,13 @@
     <a href="https://github.com/akseldan/legendary-memory/releases">All releases</a> &middot; MIT license
   </footer>
 </div>
+<script>
+  document.getElementById('copy').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    try { await navigator.clipboard.writeText(document.getElementById('cmd').textContent); button.textContent = 'Copied'; }
+    catch { getSelection().selectAllChildren(document.getElementById('cmd')); button.textContent = 'Press \u2318C'; }
+    setTimeout(() => (button.textContent = 'Copy'), 1800);
+  });
+</script>
 </body>
 </html>
