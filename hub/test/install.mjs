@@ -4,7 +4,7 @@
 // memory alone, and uninstall cleanly. Builds are done by `npm run test:install`.
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -85,6 +85,8 @@ const newHome = (name) => {
 const lm = (home) => join(home, '.legendary-memory');
 const launcher = (home) => join(lm(home), 'bin', 'legendary-memory');
 const count = (text, part) => text.split(part).length - 1;
+// Node reports its own path with links resolved (on macOS the temp folder /var is a link to /private/var).
+const samePath = (a, b) => { try { return realpathSync(a) === realpathSync(b); } catch { return false; } };
 const nodeFetches = () => requests.filter((url) => url.startsWith('/node/')).length;
 
 try {
@@ -149,7 +151,7 @@ try {
   const setup = spawnSync(launcher(home), ['setup'], { encoding: 'utf8', env: { HOME: home, PATH: '/usr/bin:/bin', NODE_NO_WARNINGS: '1' } });
   const cursor = JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8')).mcpServers;
   check('setup connects Cursor', setup.status === 0 && /Cursor\s+connected/.test(setup.stdout), setup.stdout + setup.stderr);
-  check('the app runs the private Node.js, which no upgrade of another Node.js can break', cursor['legendary-memory']?.command === node, JSON.stringify(cursor));
+  check('the app runs the private Node.js, which no upgrade of another Node.js can break', samePath(cursor['legendary-memory']?.command ?? '', node), JSON.stringify(cursor));
   check('and the installed program', cursor['legendary-memory']?.args?.[0] === join(lm(home), 'bin', 'legendary-memory.mjs'), JSON.stringify(cursor));
   check("the app's other servers are kept", cursor.other?.command === 'other-server');
 
@@ -185,7 +187,7 @@ try {
   release = { mjs: newer, sums: `${sha256(newer)}  legendary-memory.mjs\n` };
   r = await run(home, []);
   check('a new release replaces the program in place', r.code === 0 && readFileSync(join(lm(home), 'bin', 'legendary-memory.mjs')).equals(newer), r.out);
-  check('apps stay connected through the update', JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8')).mcpServers['legendary-memory']?.command === node);
+  check('apps stay connected through the update', samePath(JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8')).mcpServers['legendary-memory']?.command ?? '', node));
 
   console.log('\nTampered downloads');
   release = { mjs: Buffer.from('console.log("not the real program")'), sums: `${sha256(bundle)}  legendary-memory.mjs\n` };
