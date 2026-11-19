@@ -17,3 +17,6 @@ exports/
 conversations*.json
 
 .DS_Store
+
+# Generated benchmark fixtures (regenerate with bench/fixtures.mjs)
+hub/bench/out/
