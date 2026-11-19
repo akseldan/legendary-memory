@@ -19,7 +19,7 @@
     "test:host": "npm run build:local && node test/host.mjs",
     "test:setup": "npm run build:local && node test/setup.mjs",
     "pack:mcpb": "npm run build:local && node ../packaging/mcpb/pack.mjs",
-    "test:all": "npm run typecheck && vitest run && npm run build:local && node test/local.mjs && node test/host.mjs && node test/setup.mjs && node test/ui.mjs && node test/copy.mjs && node test/host-ui.mjs && node test/db.mjs && node test/backup.mjs && node test/ingest.mjs && node test/search-v2.mjs && node test/deletions.mjs",
+    "test:all": "npm run typecheck && vitest run && npm run build:local && node test/local.mjs && node test/host.mjs && node test/setup.mjs && node test/ui.mjs && node test/copy.mjs && node test/host-ui.mjs && node test/db.mjs && node test/backup.mjs && node test/ingest.mjs && node test/search-v2.mjs && node test/deletions.mjs && node test/local-guards.mjs",
     "prepublishOnly": "npm run test:all",
     "start": "npm run build:local && node dist/legendary-memory.mjs start",
     "test:ui": "npm run build:local && node test/ui.mjs",
@@ -28,7 +28,7 @@
     "test:db": "npm run build:local && node test/db.mjs",
     "test:backup": "npm run build:local && node test/backup.mjs",
     "test:ingest": "npm run build:local && node test/ingest.mjs",
-    "test:search": "npm run build:local && node test/search-v2.mjs && node test/deletions.mjs"
+    "test:search": "npm run build:local && node test/search-v2.mjs && node test/deletions.mjs && node test/local-guards.mjs"
   },
   "devDependencies": {
     "@cfworker/json-schema": "^4.1.6",
