@@ -157,6 +157,8 @@ export interface Resolution {
   fuzzy: boolean;
   /** Other plausible projects, best first (excludes `match`). */
   candidates: Project[];
+  /** True when `match` is the exact name, slug or alias, or contains every word whole. Safe for writes. */
+  strong: boolean;
 }
 
 function scoreProject(project: Project, ref: string): number {
@@ -172,6 +174,9 @@ function scoreProject(project: Project, ref: string): number {
     const nameWords = keyWords(name);
     if (nameWords.length === 0) continue;
     if (nameWords.join(' ') === refWords.join(' ')) best = Math.max(best, 95);
+    // Every word appears whole in the name ("cooling" → "Cooling Rig"): confident.
+    if (refWords.every((word) => nameWords.includes(word))) best = Math.max(best, 90);
+    // Some words are only the start of a name word ("cookin" → "Cooking Club"): likely, not certain.
     const hits = refWords.filter((word) => nameWords.some((other) => other === word || other.startsWith(word)));
     if (hits.length === refWords.length) best = Math.max(best, 80);
     else if (hits.length > 0) best = Math.max(best, 50 + Math.round((20 * hits.length) / refWords.length));
@@ -190,13 +195,13 @@ export async function resolveProject(db: Db, ref: string): Promise<Resolution> {
     .filter((entry) => entry.score >= 50)
     .sort((a, b) => b.score - a.score);
   const [top, second] = scored;
-  if (!top) return { fuzzy: false, candidates: [] };
+  if (!top) return { fuzzy: false, candidates: [], strong: false };
   const clear = top.score >= 80 && (!second || top.score - second.score >= 15);
   const onlyOne = top.score >= 60 && !second;
   if (clear || onlyOne) {
-    return { match: top.project, fuzzy: top.score < 80, candidates: scored.slice(1, 5).map((e) => e.project) };
+    return { match: top.project, fuzzy: top.score < 80, strong: top.score >= 90, candidates: scored.slice(1, 5).map((e) => e.project) };
   }
-  return { fuzzy: false, candidates: scored.slice(0, 5).map((e) => e.project) };
+  return { fuzzy: false, strong: false, candidates: scored.slice(0, 5).map((e) => e.project) };
 }
 
 export async function createProject(db: Db, name: string): Promise<Project> {
@@ -480,9 +485,6 @@ export async function ingestConversation(
     return { seq: message.seq, role: message.role, text: clean.text };
   });
   const payload = JSON.stringify(rows);
-  const seqs = rows.map((row) => row.seq);
-  const low = seqs.length ? Math.min(...seqs) : 0;
-  const high = seqs.length ? Math.max(...seqs) : -1;
 
   const statements: Statement[] = [
     db
@@ -498,44 +500,75 @@ export async function ingestConversation(
       )
       .bind(id, input.source, input.externalId, projectId, title.text, input.url ?? '', input.startedAt ?? null, now),
   ];
+  // Only messages that are new or differ from what is stored are written and re-indexed, so
+  // re-sending history costs reads, not writes. A changed title touches every indexed message,
+  // because each one carries the chat title for ranking.
+  const titleChanged = Boolean(existing) && title.text !== '' && title.text !== existing?.title;
+  const indexTitle = title.text || existing?.title || '';
+  const CHANGED = `SELECT json_extract(j.value, '$.seq') FROM json_each(?2) j
+     WHERE NOT EXISTS (SELECT 1 FROM messages x WHERE x.conversation_id = ?1 AND x.seq = json_extract(j.value, '$.seq')
+       AND x.role = json_extract(j.value, '$.role') AND x.text = json_extract(j.value, '$.text'))`;
   if (rows.length > 0) {
     statements.push(
-      db
-        .prepare(
-          `INSERT INTO messages (conversation_id, seq, role, text)
-           SELECT ?1, json_extract(value, '$.seq'), json_extract(value, '$.role'), json_extract(value, '$.text')
-           FROM json_each(?2) WHERE true
-           ON CONFLICT (conversation_id, seq) DO UPDATE SET role = excluded.role, text = excluded.text`,
-        )
-        .bind(id, payload),
+      // 1. Drop index rows of the messages about to change.
       db
         .prepare(
           `DELETE FROM search_fts WHERE rowid IN
-             (SELECT id FROM search_map WHERE kind = 'message' AND ref_id = ?1 AND seq BETWEEN ?2 AND ?3)`,
+             (SELECT id FROM search_map WHERE kind = 'message' AND ref_id = ?1 AND seq IN (${CHANGED}))`,
         )
-        .bind(id, low, high),
-      db.prepare("DELETE FROM search_map WHERE kind = 'message' AND ref_id = ?1 AND seq BETWEEN ?2 AND ?3").bind(id, low, high),
+        .bind(id, payload),
+      db.prepare(`DELETE FROM search_map WHERE kind = 'message' AND ref_id = ?1 AND seq IN (${CHANGED})`).bind(id, payload),
+      // 2. Write only new or different messages.
+      db
+        .prepare(
+          `INSERT INTO messages (conversation_id, seq, role, text)
+           SELECT ?1, json_extract(j.value, '$.seq'), json_extract(j.value, '$.role'), json_extract(j.value, '$.text')
+           FROM json_each(?2) j WHERE json_extract(j.value, '$.seq') IN (${CHANGED})
+           ON CONFLICT (conversation_id, seq) DO UPDATE SET role = excluded.role, text = excluded.text`,
+        )
+        .bind(id, payload),
+    );
+  }
+  if (titleChanged) {
+    // Re-index the whole chat under its new title.
+    statements.push(
+      db
+        .prepare(`DELETE FROM search_fts WHERE rowid IN (SELECT id FROM search_map WHERE kind = 'message' AND ref_id = ?1)`)
+        .bind(id),
+      db.prepare(`DELETE FROM search_map WHERE kind = 'message' AND ref_id = ?1`).bind(id),
+    );
+  }
+  if (rows.length > 0 || titleChanged) {
+    statements.push(
+      // 3. Index every stored message of this chat that has no index row yet.
       db
         .prepare(
           `INSERT INTO search_map (kind, ref_id, project_id, seq, created_at)
-           SELECT 'message', ?1, ?2, seq, ?5 FROM messages WHERE conversation_id = ?1 AND seq BETWEEN ?3 AND ?4`,
+           SELECT 'message', ?1, ?2, msg.seq, ?3 FROM messages msg
+           WHERE msg.conversation_id = ?1
+             AND NOT EXISTS (SELECT 1 FROM search_map m WHERE m.kind = 'message' AND m.ref_id = ?1 AND m.seq = msg.seq)`,
         )
         // Imported history keeps its real date; live captures without one use now.
-        .bind(id, projectId, low, high, input.startedAt ?? existing?.started_at ?? now),
+        .bind(id, projectId, input.startedAt ?? existing?.started_at ?? now),
       db
         .prepare(
           `INSERT INTO search_fts (rowid, title, body)
-           SELECT m.id, ?4, substr(msg.text, 1, ${INDEX_BODY_CHARS})
+           SELECT m.id, ?2, substr(msg.text, 1, ${INDEX_BODY_CHARS})
            FROM search_map m JOIN messages msg ON msg.conversation_id = m.ref_id AND msg.seq = m.seq
-           WHERE m.kind = 'message' AND m.ref_id = ?1 AND m.seq BETWEEN ?2 AND ?3`,
+           WHERE m.kind = 'message' AND m.ref_id = ?1 AND NOT EXISTS (SELECT 1 FROM search_fts f WHERE f.rowid = m.id)`,
         )
-        .bind(id, low, high, title.text || existing?.title || ''),
+        .bind(id, indexTitle),
     );
   }
   statements.push(
-    db.prepare("UPDATE search_map SET project_id = ?2 WHERE kind = 'message' AND ref_id = ?1").bind(id, projectId),
     db
-      .prepare('UPDATE conversations SET message_count = (SELECT count(*) FROM messages WHERE conversation_id = ?1) WHERE id = ?1')
+      .prepare("UPDATE search_map SET project_id = ?2 WHERE kind = 'message' AND ref_id = ?1 AND project_id IS NOT ?2")
+      .bind(id, projectId),
+    db
+      .prepare(
+        `UPDATE conversations SET message_count = (SELECT count(*) FROM messages WHERE conversation_id = ?1)
+         WHERE id = ?1 AND message_count != (SELECT count(*) FROM messages WHERE conversation_id = ?1)`,
+      )
       .bind(id),
   );
   await db.batch(statements);
