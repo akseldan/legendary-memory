@@ -21,7 +21,7 @@ CANONICAL = {
     "checkpoints": ("id, project_id, source, title, summary, decisions, next_steps, created_at", "id"),
     "artifacts": ("id, project_id, name, kind, content, version, source, created_at, updated_at", "id"),
     "profile": ("key, value, updated_at", "key"),
-    "conversations": ("id, source, external_id, project_id, title, url, started_at, updated_at, message_count", "source, external_id"),
+    "conversations": ("source, external_id, project_id, title, url, started_at, updated_at, message_count", "source, external_id"),
     "messages": ("(SELECT source || char(0) || external_id FROM conversations c WHERE c.id = m.conversation_id) AS conv, seq, role, text", "conv, seq"),
     "deletions": ("kind, ref, deleted_at", "kind, ref"),
 }
