@@ -9,6 +9,7 @@
  *   legendary-memory serve        local HTTP on 127.0.0.1 (importer, extension, HTTP clients)
  *   legendary-memory host         reachable from the internet with sign-in (phone, web apps)
  *   legendary-memory copy         add one memory's contents to another (computer, server, file)
+ *   legendary-memory backup       a consistent, verified copy of one memory in one file
  *   legendary-memory info         where things are, plus copy-paste connector settings
  */
 import { spawn } from 'node:child_process';
@@ -47,6 +48,8 @@ const USAGE = `Legendary Memory ${VERSION}: one memory shared across your AI ass
   legendary-memory copy --from <hub> --to <hub> [--apply] [--replace-older] [--only projects,chats,profile]
                                        Add one memory to another. <hub> is https://..., http://127.0.0.1:PORT,
                                        "local" or a .db file. Reports only until you add --apply
+  legendary-memory backup --to <file> [--from <hub>]
+                                       A consistent, verified copy of one memory (default: this computer's)
   legendary-memory info                Show where your data is and settings to paste by hand
   legendary-memory serve [--port N]    Local-only HTTP server for the importer and extension
   legendary-memory host --url https://your-address [--port N] [--bind ADDR] [--behind-proxy]
@@ -191,6 +194,16 @@ async function main(): Promise<void> {
       const unknown = asked.filter((g) => !(GROUPS as readonly string[]).includes(g));
       if (unknown.length) throw new Error(`--only takes ${GROUPS.join(', ')}; "${unknown.join(', ')}" is not one of them.`);
       await runCopy({ from, to, apply: has('--apply'), replaceOlder: has('--replace-older'), only: new Set(asked as (typeof GROUPS)[number][]) });
+      return;
+    }
+    case 'backup': {
+      if (['--key', '--from-key'].some(has)) {
+        throw new Error('Keys are not accepted on the command line, where they stay in your shell history.\nSet LEGENDARY_MEMORY_FROM_KEY, or leave it unset to be asked.');
+      }
+      const to = flag('--to');
+      if (!to) throw new Error('backup needs a file to write, for example:\n  legendary-memory backup --to ~/memory-backup.db');
+      const { runBackup } = await import('./backup');
+      await runBackup({ from: flag('--from') ?? 'local', to });
       return;
     }
     case 'info': {

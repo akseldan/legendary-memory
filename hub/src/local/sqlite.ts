@@ -59,6 +59,11 @@ class LocalStatement implements Statement {
 class LocalDb implements Db {
   constructor(private readonly db: DatabaseSync) {}
 
+  /** Lets a short-lived command (copy, backup) release the file when it is done. */
+  close(): void {
+    if (this.db.isOpen) this.db.close();
+  }
+
   prepare(sql: string): Statement {
     return new LocalStatement(this.db.prepare(sql), sql);
   }
@@ -77,7 +82,7 @@ class LocalDb implements Db {
 }
 
 /** Opens (creating if needed) the memory database and applies any migrations it lacks. */
-export function openDatabase(file: string): Db {
+export function openDatabase(file: string): Db & { close(): void } {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
   const db = new (loadSqlite().DatabaseSync)(file);
   // Waiting for another program's lock has to be set before anything that needs one.

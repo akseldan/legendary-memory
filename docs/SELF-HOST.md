@@ -28,8 +28,11 @@ printf 'DOMAIN=memory.example.com\nPASSPHRASE=at-least-twelve-characters\n' > .e
 docker compose up -d
 ```
 
-Caddy fetches and renews the certificate. Your memory is in the `memory-data` volume; back
-it up with `docker compose cp memory:/data ./backup`.
+Caddy fetches and renews the certificate. Your memory is in the `memory-data` volume. Back it
+up while it runs with
+`docker compose exec memory node /app/legendary-memory.mjs backup --to /data/backups/memory-$(date +%F).db`,
+then copy that one file off the server. Do not copy `/data` itself while the hub is running:
+recent writes sit in `memory.db-wal`, and a copy taken mid-write can be incomplete.
 
 ## Option B: a tunnel, no domain and no open ports
 
@@ -81,7 +84,11 @@ opens your sign-in page; check it names the app you expect, type the passphrase,
 | | `LEGENDARY_MEMORY_REDIRECT_HOSTS` | Apps allowed to sign in. Default: Claude, ChatGPT and localhost. |
 
 The data folder holds `memory.db` (your memory), `sign-in.db` (which apps are connected)
-and `api-key` (for the importer and the Obsidian mirror). Copy `memory.db` to back up.
+and `api-key` (for the importer and the Obsidian mirror). To back up, run
+`legendary-memory backup --to <new file>`: it uses SQLite's online backup, so it is safe while apps
+are connected, and writes a `.manifest.json` beside the file. Copying `memory.db` by hand while the
+hub runs can miss every recent write (they live in `memory.db-wal` until SQLite folds them in).
+Restore with `legendary-memory copy --from <backup file> --to <empty home> --apply`.
 Deleting `sign-in.db` disconnects every app without touching your memory.
 
 ## How it differs from the Cloudflare version

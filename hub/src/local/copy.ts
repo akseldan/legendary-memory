@@ -48,6 +48,8 @@ interface Hub {
   exportRows(table: (typeof store.EXPORT_TABLES)[number]): AsyncGenerator<Row[]>;
   importRows(table: store.ImportTable, rows: Row[], options: ImportOptions): Promise<store.ImportResult>;
   ingest(body: IngestBody): Promise<void>;
+  /** Releases a memory file opened for this copy. */
+  close?(): void;
 }
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
@@ -131,9 +133,10 @@ function httpHub(address: URL, key: string): Hub {
   };
 }
 
-function fileHub(path: string, db: Db): Hub {
+function fileHub(path: string, db: Db & { close(): void }): Hub {
   return {
     label: path,
+    close: () => db.close(),
     async *exportRows(table) {
       let after = 0;
       for (;;) {
@@ -224,7 +227,17 @@ function describe(r: store.ImportResult): string {
 
 export async function runCopy(options: CopyOptions, log: (line: string) => void = console.log): Promise<void> {
   const from = await open('from', options.from);
-  const to = await open('to', options.to);
+  let to: Hub | undefined;
+  try {
+    to = await open('to', options.to);
+    await copyBetween(from, to, options, log);
+  } finally {
+    from.close?.();
+    to?.close?.();
+  }
+}
+
+async function copyBetween(from: Hub, to: Hub, options: CopyOptions, log: (line: string) => void): Promise<void> {
   if (from.label === to.label) throw new Error('--from and --to are the same place. Pick two different memories.');
 
   log(`Copy from ${from.label} to ${to.label}`);
