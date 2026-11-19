@@ -6,12 +6,13 @@
  * unless --replace-older is given and the incoming one is newer. Without --apply it
  * reports what would happen and writes nothing. Running it twice changes nothing.
  */
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import type { Db } from '../core/db';
 import * as store from '../core/store';
 import { apiKey, dbPath } from './config';
-import { openDatabase } from './sqlite';
+import { loadSqlite, openDatabase } from './sqlite';
 
 type Row = Record<string, unknown>;
 export type Group = 'projects' | 'chats' | 'profile';
@@ -166,6 +167,7 @@ async function open(role: 'from' | 'to', address: string): Promise<Hub> {
   if (address === 'local' || !/^[a-z]+:\/\//i.test(address)) {
     const path = address === 'local' ? dbPath() : resolve(address);
     if (role === 'from' && !existsSync(path)) throw new Error(`There is no memory file at ${path}.`);
+    if (role === 'from' && address !== 'local') return readOnlySnapshot(path);
     return fileHub(path, openDatabase(path));
   }
   let url: URL;
@@ -176,6 +178,32 @@ async function open(role: 'from' | 'to', address: string): Promise<Hub> {
   }
   if (!httpAllowed(url)) throw new Error(`${address} must start with https://. Plain http is allowed only for this computer (127.0.0.1).`);
   return httpHub(url, await keyFor(role, url));
+}
+
+/**
+ * Reads a memory file without changing it. Opening a file upgrades its schema and journal mode,
+ * which must never happen to a backup being restored from, so copy reads a private snapshot.
+ */
+async function readOnlySnapshot(path: string): Promise<Hub> {
+  const sqlite = loadSqlite();
+  const temp = join(tmpdir(), `legendary-memory-copy-${process.pid}-${Date.now()}.db`);
+  const source = new sqlite.DatabaseSync(path, { readOnly: true });
+  try {
+    await sqlite.backup(source, temp);
+  } finally {
+    source.close();
+  }
+  const remove = () => {
+    for (const suffix of ['', '-wal', '-shm', '-journal']) rmSync(temp + suffix, { force: true });
+  };
+  try {
+    const db = openDatabase(temp);
+    const hub = fileHub(path, db);
+    return { ...hub, close: () => { db.close(); remove(); } };
+  } catch (error) {
+    remove();
+    throw error;
+  }
 }
 
 /** Splits rows into requests that stay under the row and size limits. */

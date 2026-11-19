@@ -17,6 +17,8 @@ const envFor = (dir) => {
   return env;
 };
 
+// The schema version this build ends at: one per file in migrations/.
+const CURRENT = (await import('node:fs')).readdirSync(fileURLToPath(new URL('../migrations/', import.meta.url))).filter((f) => f.endsWith('.sql')).length;
 let passed = 0;
 let failed = 0;
 const check = (name, ok, detail = '') => {
@@ -50,7 +52,7 @@ try {
   check('all eight programs start and answer', failures.length === 0, failures.map(({ seen }) => seen.err).join(' | '));
   for (const { child } of children) child.kill();
   const after = new DatabaseSync(file);
-  check('the database is at version 1 with its tables', after.prepare('PRAGMA user_version').get().user_version === 1 && after.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'projects'").get().n === 1);
+  check(`a version-1 database is upgraded to version ${CURRENT} once, with its tables`, after.prepare('PRAGMA user_version').get().user_version === CURRENT && after.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'projects'").get().n === 1);
   after.close();
 
   console.log('\nA database from a newer version');
@@ -61,7 +63,7 @@ try {
   made.kill();
   await new Promise((r) => setTimeout(r, 300));
   const future = new DatabaseSync(join(newer, 'memory.db'));
-  future.exec('PRAGMA user_version = 2; ALTER TABLE projects ADD COLUMN rehearsal TEXT;');
+  future.exec(`PRAGMA user_version = ${CURRENT + 1}; ALTER TABLE projects ADD COLUMN rehearsal TEXT;`);
   future.close();
   for (const command of ['stdio', 'serve']) {
     const run = spawnSync('node', [BIN, command, ...(command === 'serve' ? ['--port', '18841'] : [])], { env: envFor(newer), encoding: 'utf8', input: '', timeout: 15000 });
@@ -70,7 +72,7 @@ try {
   const copyRun = spawnSync('node', [BIN, 'copy', '--from', join(newer, 'memory.db'), '--to', join(root, 'elsewhere.db')], { env: envFor(root), encoding: 'utf8', timeout: 15000 });
   check('copy refuses to read it too', copyRun.status === 1 && /newer Legendary Memory/.test(copyRun.stderr), copyRun.stderr);
   const kept = new DatabaseSync(join(newer, 'memory.db'));
-  check('nothing was changed: still version 2 with its extra column', kept.prepare('PRAGMA user_version').get().user_version === 2 && kept.prepare("SELECT count(*) AS n FROM pragma_table_info('projects') WHERE name = 'rehearsal'").get().n === 1);
+  check('nothing was changed: still the newer version with its extra column', kept.prepare('PRAGMA user_version').get().user_version === CURRENT + 1 && kept.prepare("SELECT count(*) AS n FROM pragma_table_info('projects') WHERE name = 'rehearsal'").get().n === 1);
   kept.close();
 } finally {
   rmSync(root, { recursive: true, force: true });

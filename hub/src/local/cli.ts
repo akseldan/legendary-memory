@@ -10,6 +10,7 @@
  *   legendary-memory host         reachable from the internet with sign-in (phone, web apps)
  *   legendary-memory copy         add one memory's contents to another (computer, server, file)
  *   legendary-memory backup       a consistent, verified copy of one memory in one file
+ *   legendary-memory compact      give space freed by deletions and upgrades back to the disk
  *   legendary-memory info         where things are, plus copy-paste connector settings
  */
 import { spawn } from 'node:child_process';
@@ -50,6 +51,7 @@ const USAGE = `Legendary Memory ${VERSION}: one memory shared across your AI ass
                                        "local" or a .db file. Reports only until you add --apply
   legendary-memory backup --to <file> [--from <hub>]
                                        A consistent, verified copy of one memory (default: this computer's)
+  legendary-memory compact              Give space freed by deletions and upgrades back to the disk
   legendary-memory info                Show where your data is and settings to paste by hand
   legendary-memory serve [--port N]    Local-only HTTP server for the importer and extension
   legendary-memory host --url https://your-address [--port N] [--bind ADDR] [--behind-proxy]
@@ -204,6 +206,11 @@ async function main(): Promise<void> {
       if (!to) throw new Error('backup needs a file to write, for example:\n  legendary-memory backup --to ~/memory-backup.db');
       const { runBackup } = await import('./backup');
       await runBackup({ from: flag('--from') ?? 'local', to });
+      return;
+    }
+    case 'compact': {
+      const { runCompact } = await import('./compact');
+      runCompact();
       return;
     }
     case 'info': {
