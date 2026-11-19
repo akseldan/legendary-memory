@@ -1,6 +1,6 @@
 # Legendary Memory data contract — draft v0.1 (2026-11-19)
 
-Status: **draft for owner review** (execution plan P1.1–P1.2). Each rule is marked:
+Status: **approved by Daniel 2026-11-19** (execution plan P1.1–P1.2); §10 decisions recorded below. Each rule is marked:
 
 - **Current** — what the code on `main` (`8d7d048`, schema v1) does today.
 - **Target** — what P2/P3 will implement. Changing stored records waits for owner approval of this file.
@@ -111,11 +111,11 @@ Current: local stdio grants read+write+delete; hosted OAuth issues read and writ
 | Read page | 500–40,000 chars, default 8,000 | Same; long items always paginate, never truncate the stored source |
 | Recall reply | Clamped to a token budget | Default target ~2,000 tokens (P1.3 measurement: ~900 chars at baseline) |
 
-## 10. Open decisions for Daniel
+## 10. Decisions (Daniel, 2026-11-19)
 
-1. Artifact history: keep latest only (recommended) or N old bodies?
-2. Ambiguous writes: refuse and list candidates (recommended) vs. ask the user through the assistant with a default?
-3. Deletion ledger retention: forever (identity only, tiny) — recommended — or match backup retention?
-4. Add `codex`/`cursor` as chat sources: recommended yes.
+1. Artifact history: **keep the latest only** (today's behavior).
+2. Ambiguous project names on writes: **refuse and list the candidates**; nothing is saved.
+3. Deletion ledger: **kept forever** (identity only, no content).
+4. Chat sources: **add `codex` and `cursor`**.
 
-Approving this draft unlocks the P2 changes (incremental import, chunked search, name confirmation) and the P3 deletion ledger.
+These unlock the P2 changes (incremental import, chunked search, name confirmation) and the P3 deletion ledger.
