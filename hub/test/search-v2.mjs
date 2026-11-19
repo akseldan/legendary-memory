@@ -104,7 +104,8 @@ try {
     check('the edited file has one index row', peek(fileA, "SELECT count(*) AS n FROM search_map WHERE kind = 'artifact'")[0].n === 1);
   });
 
-  check('the upgraded file is at schema 2', peek(fileA, 'PRAGMA user_version')[0].user_version === 2);
+  const CURRENT = (await import('node:fs')).readdirSync(fileURLToPath(new URL('../migrations/', import.meta.url))).filter((f) => f.endsWith('.sql')).length;
+  check(`the upgraded file is at the current schema (${CURRENT})`, peek(fileA, 'PRAGMA user_version')[0].user_version === CURRENT);
   const ftsSql = peek(fileA, "SELECT sql FROM sqlite_master WHERE name = 'search_fts'")[0]?.sql ?? '';
   check('the index keeps no copy of the text (contentless)', /content\s*=\s*''/.test(ftsSql) && peek(fileA, "SELECT count(*) AS n FROM sqlite_master WHERE name = 'search_fts_content'")[0].n === 0, ftsSql);
   check('the rebuild left no work table behind', peek(fileA, "SELECT count(*) AS n FROM sqlite_master WHERE name LIKE '_search_rebuild%'")[0].n === 0);

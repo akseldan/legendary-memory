@@ -233,10 +233,11 @@ const sum = (parts: store.ImportResult[]): store.ImportResult =>
       replaced: all.replaced + p.replaced,
       kept: all.kept + p.kept,
       skipped: all.skipped + p.skipped,
+      deleted: all.deleted + p.deleted,
       notes: [...all.notes, ...p.notes],
       idMap: { ...all.idMap, ...p.idMap },
     }),
-    { inserted: 0, same: 0, replaced: 0, kept: 0, skipped: 0, notes: [], idMap: {} },
+    { inserted: 0, same: 0, replaced: 0, kept: 0, skipped: 0, deleted: 0, notes: [], idMap: {} },
   );
 
 async function all(hub: Hub, table: (typeof store.EXPORT_TABLES)[number]): Promise<Row[]> {
@@ -245,8 +246,27 @@ async function all(hub: Hub, table: (typeof store.EXPORT_TABLES)[number]): Promi
   return rows;
 }
 
-function describe(r: store.ImportResult): string {
+/** A hub from before the deletion ledger (schema 3) has no such table; treat it as empty. */
+async function ledgerOf(hub: Hub, notes: string[]): Promise<Row[]> {
+  try {
+    return await all(hub, 'deletions');
+  } catch (error) {
+    if (/Unknown table|deletions/i.test(error instanceof Error ? error.message : '')) {
+      notes.push(`${hub.label} is an older version without deletion records; update it so deletions travel with copies.`);
+      return [];
+    }
+    throw error;
+  }
+}
+
+function describe(r: store.ImportResult, table?: string): string {
+  if (table === 'deletions') {
+    const parts = [`${r.inserted} new`, `${r.same} already there`];
+    if (r.deleted) parts.push(`${r.deleted} removed here`);
+    return parts.join(', ');
+  }
   const parts = [`${r.inserted} new`, `${r.same} already there`];
+  if (r.deleted) parts.push(`${r.deleted} not copied (deleted here)`);
   if (r.replaced) parts.push(`${r.replaced} replaced`);
   if (r.kept) parts.push(`${r.kept} differ (kept the destination's)`);
   if (r.skipped) parts.push(`${r.skipped} skipped (their project is missing)`);
@@ -278,9 +298,9 @@ async function copyBetween(from: Hub, to: Hub, options: CopyOptions, log: (line:
   const write = options.apply;
   const replace = options.replaceOlder;
   const idMap: Record<string, string> = {};
-  const importTable = async (table: store.ImportTable, dryRun: boolean): Promise<store.ImportResult> => {
+  const importTable = async (table: store.ImportTable, dryRun: boolean, given?: Row[]): Promise<store.ImportResult> => {
     const parts: store.ImportResult[] = [];
-    for (const chunk of chunks(await all(from, table))) {
+    for (const chunk of chunks(given ?? (await all(from, table)))) {
       const part = await to.importRows(table, chunk, { replace, dryRun, idMap });
       Object.assign(idMap, part.idMap);
       parts.push(part);
@@ -288,10 +308,22 @@ async function copyBetween(from: Hub, to: Hub, options: CopyOptions, log: (line:
     return sum(parts);
   };
   const notes: string[] = [];
-  const report = (label: string, result: store.ImportResult) => {
-    log(`  ${label.padEnd(10)}${describe(result)}`);
+  const report = (label: string, result: store.ImportResult, table?: string) => {
+    log(`  ${label.padEnd(10)}${describe(result, table)}`);
     notes.push(...result.notes);
   };
+
+  // Deletions first: what was deleted on the source is removed here and listed, so neither
+  // this copy nor a later one brings it back.
+  const sourceLedger = await ledgerOf(from, notes);
+  if (sourceLedger.length > 0) {
+    try {
+      report('deleted', await importTable('deletions', !write, sourceLedger), 'deletions');
+    } catch (error) {
+      if (!/table must be one of/i.test(error instanceof Error ? error.message : '')) throw error;
+      notes.push(`${to.label} is an older version without deletion records; ${sourceLedger.length} deletions were not carried over.`);
+    }
+  }
 
   const wantsChats = options.only.has('chats');
   // Chats are filed under the destination's project ids, so those are always worked out,
@@ -308,6 +340,10 @@ async function copyBetween(from: Hub, to: Hub, options: CopyOptions, log: (line:
   if (options.only.has('profile')) report('facts', await importTable('profile', !write));
 
   if (wantsChats) {
+    const gone = new Set(
+      [...sourceLedger, ...(await ledgerOf(to, []))].filter((r) => r.kind === 'conversation').map((r) => String(r.ref)),
+    );
+    let deletedChats = 0;
     const there = new Map<string, { message_count: number; updated_at: string; project_id: string | null }>();
     for (const row of await all(to, 'conversations')) {
       there.set(`${row.source}\u0000${row.external_id}`, row as never);
@@ -316,6 +352,10 @@ async function copyBetween(from: Hub, to: Hub, options: CopyOptions, log: (line:
     let same = 0;
     let updated = 0;
     for (const row of await all(from, 'conversations')) {
+      if (gone.has(`${row.source}:${row.external_id}`)) {
+        deletedChats++;
+        continue;
+      }
       const stored = there.get(`${row.source}\u0000${row.external_id}`);
       if (stored && stored.message_count >= Number(row.message_count) && Date.parse(stored.updated_at) >= Date.parse(String(row.updated_at))) {
         same++;
@@ -361,11 +401,11 @@ async function copyBetween(from: Hub, to: Hub, options: CopyOptions, log: (line:
       }
       if (++sent % 25 === 0) log(`  chats     ${sent} of ${toSend.size}...`);
     }
-    log(`  ${'chats'.padEnd(10)}${toSend.size - updated} new, ${updated} extended, ${same} already there`);
+    log(`  ${'chats'.padEnd(10)}${toSend.size - updated} new, ${updated} extended, ${same} already there${deletedChats ? `, ${deletedChats} not copied (deleted)` : ''}`);
   }
 
   for (const line of notes.slice(0, 50)) log(`  note: ${line}`);
   log('');
   log(write ? 'Done. Run it again any time: what is already there is skipped.' : 'Nothing was written. Run again with --apply to copy.');
-  log('Copy only adds. Anything you deleted on the source stays on the destination.');
+  log('Copy adds what is missing and carries deletions: anything deleted on either side stays deleted.');
 }

@@ -73,12 +73,15 @@ Judged cases live in `bench/fixtures.mjs` (`project-name` kind).
 
 ## 6. Deletions must survive restores and copies
 
-Current gap: deletes leave no trace. Restoring an older backup, or running `copy` from a home that still has the item, brings deleted memories back.
+**Implemented 2026-11-19 (schema 3, `migrations/0003_deletions.sql`, tested by `hub/test/deletions.mjs`).**
+Before that, deletes left no trace and an older backup or another home could bring them back.
 
 Target (P3/P9):
 - New table `deletions(kind, ref, deleted_at)` — identity only, no content. Not restorable content: it is kept outside the memory export's restorable rows and re-applied after any restore.
 - `copy` and restore skip rows whose identity is in the destination's `deletions`, and report how many they skipped.
-- A restore lands in quarantine (inactive home), deletions are applied, then it is activated (P3.5).
+- `copy` carries the ledger: deletions on the source are applied on the destination and reported ("N removed here").
+- A deliberate `remember` of a deleted key clears that key's entry (a new fact). New saves get new ids, so they are never blocked.
+- Known limit: restoring an old backup into an **empty** home cannot know about later deletions; copy from the current home afterwards (or restore into it) and they are removed. P3.5's quarantined restore will make this automatic.
 
 Acceptance: delete a checkpoint, restore a backup taken before the delete, the checkpoint stays deleted.
 
