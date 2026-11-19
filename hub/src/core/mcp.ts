@@ -44,6 +44,7 @@ function sourceLabel(client: string): string {
   const name = client.toLowerCase();
   if (name.includes('claude')) return 'claude';
   if (name.includes('codex')) return 'codex';
+  if (name.includes('cursor')) return 'cursor';
   if (name.includes('chatgpt') || name.includes('openai')) return 'chatgpt';
   if (name.includes('gemini')) return 'gemini';
   return slugify(client).slice(0, 30) || 'assistant';
@@ -113,7 +114,10 @@ export function buildServer(
   /** Picks the project a write should go to, creating it only when nothing similar exists. */
   async function projectForWrite(ref: string, forceNew: boolean | undefined) {
     const found = await store.resolveProject(db, ref);
-    if (found.match && !found.fuzzy && !forceNew) return { project: found.match, created: false };
+    // A write goes ahead on a confident match, or on a likely one when nothing else is close.
+    // "cookin" with both Cooking Club and Cooling Rig stored asks instead of guessing.
+    const safe = found.match && !found.fuzzy && (found.strong || found.candidates.length === 0);
+    if (safe && !forceNew) return { project: found.match!, created: false };
     const similar = [...(found.match ? [found.match] : []), ...found.candidates];
     if (forceNew || similar.length === 0) return { project: await store.createProject(db, ref), created: true };
     return {

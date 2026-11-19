@@ -9,7 +9,7 @@ import * as store from './store';
 const MAX_BODY_BYTES = 1_500_000;
 const MAX_MESSAGES = 2000;
 const MAX_IMPORT_ROWS = 100;
-const SOURCES = new Set(['chatgpt', 'claude', 'gemini', 'other']);
+const SOURCES = new Set(['chatgpt', 'claude', 'codex', 'cursor', 'gemini', 'other']);
 const ROLES = new Set(['user', 'assistant', 'system', 'tool']);
 
 const json = (body: unknown, status = 200): Response =>
