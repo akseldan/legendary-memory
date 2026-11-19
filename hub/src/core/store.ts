@@ -65,8 +65,23 @@ export interface SearchHit {
   created_at: string;
 }
 
-/** Longest stretch of a row's text that goes into the search index. */
-const INDEX_BODY_CHARS = 8000;
+/**
+ * Long text is indexed in chunks of CHUNK_CHARS characters, each overlapping the next by
+ * CHUNK_OVERLAP so a phrase crossing a boundary is still found. Must match migrations/0002.
+ * Lengths are in characters (code points), as SQLite's length() and substr() count them.
+ */
+const CHUNK_CHARS = 4000;
+const CHUNK_OVERLAP = 200;
+
+/** The chunks a body is indexed as. Always at least one, so empty bodies still index their title. */
+function chunksOf(body: string): string[] {
+  const chars = Array.from(body);
+  const out = [chars.slice(0, CHUNK_CHARS + CHUNK_OVERLAP).join('')];
+  for (let k = 1; chars.length > k * CHUNK_CHARS + CHUNK_OVERLAP; k++) {
+    out.push(chars.slice(k * CHUNK_CHARS, k * CHUNK_CHARS + CHUNK_CHARS + CHUNK_OVERLAP).join(''));
+  }
+  return out;
+}
 const BRIEF_VERSIONS_KEPT = 10;
 
 // ---------------------------------------------------------------- search index
@@ -91,14 +106,16 @@ function reindex(
 ): Statement[] {
   return [
     ...unindex(db, kind, refId),
-    db
-      .prepare('INSERT INTO search_map (kind, ref_id, project_id, seq, created_at) VALUES (?1, ?2, ?3, 0, ?4)')
-      .bind(kind, refId, projectId, createdAt),
-    db
-      .prepare(
-        'INSERT INTO search_fts (rowid, title, body) SELECT id, ?3, ?4 FROM search_map WHERE kind = ?1 AND ref_id = ?2',
-      )
-      .bind(kind, refId, title, body.slice(0, INDEX_BODY_CHARS)),
+    ...chunksOf(body).flatMap((chunk, k) => [
+      db
+        .prepare('INSERT INTO search_map (kind, ref_id, project_id, seq, chunk, created_at) VALUES (?1, ?2, ?3, 0, ?4, ?5)')
+        .bind(kind, refId, projectId, k, createdAt),
+      db
+        .prepare(
+          'INSERT INTO search_fts (rowid, title, body) SELECT id, ?4, ?5 FROM search_map WHERE kind = ?1 AND ref_id = ?2 AND chunk = ?3',
+        )
+        .bind(kind, refId, k, title, chunk),
+    ]),
   ];
 }
 
@@ -123,20 +140,103 @@ export async function search(
     });
     where.push(`m.kind IN (${marks.join(', ')})`);
   }
-  binds.push(limit);
-  // Title matches count four times as much as body matches.
+  binds.push(limit * 4, limit);
+  // Title matches count four times as much as body matches. A long item matches once per chunk;
+  // keep its best chunk so one document cannot fill the whole result list. The inner LIMIT also
+  // keeps SQLite from flattening the subquery, which bm25() does not allow.
   const sql = `
-    SELECT m.kind, m.ref_id, m.project_id, m.seq, m.created_at, search_fts.title AS title,
-           snippet(search_fts, 1, '', '', ' … ', 28) AS snippet
-    FROM search_fts JOIN search_map m ON m.id = search_fts.rowid
-    WHERE ${where.join(' AND ')}
-    ORDER BY bm25(search_fts, 4.0, 1.0)
+    SELECT kind, ref_id, project_id, seq, created_at, chunk, min(rank) AS rank FROM (
+      SELECT m.kind, m.ref_id, m.project_id, m.seq, m.created_at, m.chunk, bm25(search_fts, 4.0, 1.0) AS rank
+      FROM search_fts JOIN search_map m ON m.id = search_fts.rowid
+      WHERE ${where.join(' AND ')}
+      ORDER BY rank
+      LIMIT ?${binds.length - 1}
+    )
+    GROUP BY kind, ref_id, seq
+    ORDER BY rank
     LIMIT ?${binds.length}`;
   const { results } = await db
     .prepare(sql)
     .bind(...binds)
-    .all<SearchHit>();
-  return results;
+    .all<Omit<SearchHit, 'title' | 'snippet'> & { chunk: number }>();
+  return hydrate(db, results, query);
+}
+
+/**
+ * The index keeps no copy of the text, so titles and snippets come from the records themselves.
+ * A record deleted between the search and this read is dropped from the results.
+ */
+async function hydrate(
+  db: Db,
+  hits: (Omit<SearchHit, 'title' | 'snippet'> & { chunk: number })[],
+  query: string,
+): Promise<SearchHit[]> {
+  if (hits.length === 0) return [];
+  type Row = Record<'id' | 'name' | 'brief' | 'title' | 'summary' | 'decisions' | 'next_steps' | 'content' | 'key' | 'value', string>;
+  const text = new Map<string, { title: string; body: string }>();
+  const key = (kind: string, ref: string, seq: number) => `${kind}\u0000${ref}\u0000${seq}`;
+  const ids = (kind: string) => [...new Set(hits.filter((h) => h.kind === kind).map((h) => h.ref_id))];
+  const marks = (n: number, from = 1) => Array.from({ length: n }, (_, i) => `?${i + from}`).join(', ');
+  const load = async (kind: SearchHit['kind'], sql: (m: string) => string, build: (row: Row) => [string, string, string]) => {
+    const list = ids(kind);
+    if (list.length === 0) return;
+    const { results } = await db.prepare(sql(marks(list.length))).bind(...list).all<Row>();
+    for (const row of results) {
+      const [ref, title, body] = build(row);
+      text.set(key(kind, ref, 0), { title, body });
+    }
+  };
+  await Promise.all([
+    load('project', (m) => `SELECT id, name, brief FROM projects WHERE id IN (${m})`, (r) => [r.id, r.name, r.brief]),
+    load(
+      'checkpoint',
+      (m) => `SELECT id, title, summary, decisions, next_steps FROM checkpoints WHERE id IN (${m})`,
+      (r) => [r.id, r.title, [r.summary, r.decisions, r.next_steps].filter(Boolean).join('\n')],
+    ),
+    load('artifact', (m) => `SELECT id, name, content FROM artifacts WHERE id IN (${m})`, (r) => [r.id, r.name, r.content]),
+    load('profile', (m) => `SELECT key, value FROM profile WHERE key IN (${m})`, (r) => [r.key, r.key.replace(/-/g, ' '), r.value]),
+  ]);
+  const messages = hits.filter((h) => h.kind === 'message');
+  if (messages.length > 0) {
+    const where = messages.map((_, i) => `(m.conversation_id = ?${2 * i + 1} AND m.seq = ?${2 * i + 2})`).join(' OR ');
+    const { results } = await db
+      .prepare(`SELECT c.id, c.title, m.seq, m.text FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE ${where}`)
+      .bind(...messages.flatMap((h) => [h.ref_id, h.seq]))
+      .all<{ id: string; title: string; seq: number; text: string }>();
+    for (const row of results) text.set(key('message', row.id, Number(row.seq)), { title: row.title, body: row.text });
+  }
+
+  const terms = (query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((t) => t.length > 1);
+  const out: SearchHit[] = [];
+  for (const { chunk, ...hit } of hits) {
+    const found = text.get(key(hit.kind, hit.ref_id, hit.kind === 'message' ? Number(hit.seq) : 0));
+    if (!found) continue;
+    const region = Array.from(found.body)
+      .slice(chunk * CHUNK_CHARS, chunk * CHUNK_CHARS + CHUNK_CHARS + CHUNK_OVERLAP)
+      .join('');
+    out.push({ ...hit, title: found.title, snippet: snippetOf(region, terms) });
+  }
+  return out;
+}
+
+/** About 28 words around the first query word in `text` (or its start), like FTS5's snippet(). */
+function snippetOf(text: string, terms: string[]): string {
+  const lower = text.toLowerCase();
+  let at = -1;
+  for (const term of terms) {
+    // The index stems words ("pumps" finds "pump"), so also look for the start of the word.
+    for (const probe of [term, term.length > 5 ? term.slice(0, term.length - 2) : '']) {
+      if (!probe) continue;
+      const i = lower.indexOf(probe);
+      if (i >= 0 && (at < 0 || i < at)) at = i;
+    }
+  }
+  const words = text.split(/\s+/).filter(Boolean);
+  if (at < 0) return words.slice(0, 28).join(' ') + (words.length > 28 ? ' …' : '');
+  const before = text.slice(0, at).split(/\s+/).filter(Boolean).length;
+  const start = Math.max(0, before - 8);
+  const end = Math.min(words.length, start + 28);
+  return (start > 0 ? '… ' : '') + words.slice(start, end).join(' ') + (end < words.length ? ' …' : '');
 }
 
 // -------------------------------------------------------------------- projects
@@ -540,20 +640,26 @@ export async function ingestConversation(
   }
   if (rows.length > 0 || titleChanged) {
     statements.push(
-      // 3. Index every stored message of this chat that has no index row yet.
+      // 3. Index every stored message of this chat that has no index rows yet, in chunks.
       db
         .prepare(
-          `INSERT INTO search_map (kind, ref_id, project_id, seq, created_at)
-           SELECT 'message', ?1, ?2, msg.seq, ?3 FROM messages msg
-           WHERE msg.conversation_id = ?1
-             AND NOT EXISTS (SELECT 1 FROM search_map m WHERE m.kind = 'message' AND m.ref_id = ?1 AND m.seq = msg.seq)`,
+          `WITH RECURSIVE ch(seq, k) AS (
+             SELECT msg.seq, 0 FROM messages msg
+             WHERE msg.conversation_id = ?1
+               AND NOT EXISTS (SELECT 1 FROM search_map m WHERE m.kind = 'message' AND m.ref_id = ?1 AND m.seq = msg.seq)
+             UNION ALL
+             SELECT ch.seq, ch.k + 1 FROM ch JOIN messages msg ON msg.conversation_id = ?1 AND msg.seq = ch.seq
+             WHERE length(msg.text) > (ch.k + 1) * ${CHUNK_CHARS} + ${CHUNK_OVERLAP}
+           )
+           INSERT INTO search_map (kind, ref_id, project_id, seq, chunk, created_at)
+           SELECT 'message', ?1, ?2, seq, k, ?3 FROM ch`,
         )
         // Imported history keeps its real date; live captures without one use now.
         .bind(id, projectId, input.startedAt ?? existing?.started_at ?? now),
       db
         .prepare(
           `INSERT INTO search_fts (rowid, title, body)
-           SELECT m.id, ?2, substr(msg.text, 1, ${INDEX_BODY_CHARS})
+           SELECT m.id, ?2, substr(msg.text, m.chunk * ${CHUNK_CHARS} + 1, ${CHUNK_CHARS + CHUNK_OVERLAP})
            FROM search_map m JOIN messages msg ON msg.conversation_id = m.ref_id AND msg.seq = m.seq
            WHERE m.kind = 'message' AND m.ref_id = ?1 AND NOT EXISTS (SELECT 1 FROM search_fts f WHERE f.rowid = m.id)`,
         )

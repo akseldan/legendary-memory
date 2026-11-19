@@ -20,3 +20,5 @@ conversations*.json
 
 # Generated benchmark fixtures (regenerate with bench/fixtures.mjs)
 hub/bench/out/
+hub/test/fixtures/*.db-shm
+hub/test/fixtures/*.db-wal

@@ -20,7 +20,7 @@ const arg = (name, fallback) => {
 const FIXTURE = arg('--fixture', 'bench/out/fx-10000');
 const REPEAT = Number(arg('--repeat', '3'));
 const PORT = Number(arg('--port', '18899'));
-const BIN = fileURLToPath(new URL('../dist/legendary-memory.mjs', import.meta.url));
+const BIN = arg('--bin', fileURLToPath(new URL('../dist/legendary-memory.mjs', import.meta.url)));
 const KEY = 'b'.repeat(40);
 const BASE = `http://127.0.0.1:${PORT}`;
 const home = mkdtempSync(join(tmpdir(), 'lm-bench-'));
