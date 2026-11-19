@@ -60,5 +60,13 @@ Judged questions:
 5. Latency is comfortably inside the plan's targets on this small machine (p95 local recall 15 ms
    vs 200 ms target; search 121 ms vs 300 ms) — so P2 should optimize bytes and write work, not speed.
 
-Still to do for P1.3: repeat on the owner's M3 Pro and one low-spec machine; record CPU/RAM
+## Second machine: Daniel's MacBook Pro (M3 Pro)
+
+Measured inside the Claude desktop app's Linux VM on the Mac (aarch64, 4 vCPU, 3 GiB visible RAM),
+10K fixture, 3 re-imports. Storage is identical to the table above (72.6 MiB; 3.01 bytes per byte of
+text; all 10,777 index rows rewritten per identical re-import; +15.5 MiB after 3). First import 2.1 s,
+re-import 2.0 s each. `search` p50/p95 8.7/11.9 ms; `recall` p50/p95 0.9/2.5 ms. Judgments identical.
+A native macOS run (outside the VM) remains to be recorded.
+
+Still to do for P1.3: a native macOS run and one low-spec machine; record CPU/RAM
 (idle and during import) alongside these numbers.
