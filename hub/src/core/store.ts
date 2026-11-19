@@ -530,6 +530,8 @@ export async function setProfile(db: Db, key: string, value: string): Promise<{ 
   const cleanKey = slugify(key).slice(0, 60);
   const clean = redact(value.trim());
   await db.batch([
+    // Saying it again on purpose is a new fact, so an earlier deletion no longer blocks it.
+    db.prepare("DELETE FROM deletions WHERE kind = 'profile' AND ref = ?1").bind(cleanKey),
     db
       .prepare(
         'INSERT INTO profile (key, value, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
@@ -568,7 +570,11 @@ export interface IngestInput {
 export async function ingestConversation(
   db: Db,
   input: IngestInput,
-): Promise<{ id: string; created: boolean; messages: number; redactions: number }> {
+): Promise<{ id: string; created: boolean; messages: number; redactions: number; deleted?: true }> {
+  // A chat deleted here stays deleted, however often an importer re-sends its history.
+  if (await wasDeleted(db, 'conversation', chatRef(input.source, input.externalId))) {
+    return { id: '', created: false, messages: 0, redactions: 0, deleted: true };
+  }
   const now = input.updatedAt ?? nowIso();
   const existing = await db
     .prepare('SELECT id, project_id, title, started_at FROM conversations WHERE source = ?1 AND external_id = ?2')
@@ -704,40 +710,66 @@ export async function getMessages(db: Db, conversationId: string, fromSeq: numbe
 
 // ---------------------------------------------------------------------- forget
 
-export type ForgetKind = 'project' | 'checkpoint' | 'artifact' | 'profile' | 'conversation';
 
-/** Permanently delete one stored item and everything indexed for it. Returns false if it did not exist. */
-export async function forget(db: Db, kind: ForgetKind, id: string): Promise<boolean> {
+export type DeletionKind = 'project' | 'checkpoint' | 'artifact' | 'profile' | 'conversation';
+const DELETION_KINDS: readonly DeletionKind[] = ['project', 'checkpoint', 'artifact', 'profile', 'conversation'];
+
+/** Ledger key of a chat: chats are identified across homes by where they came from. */
+const chatRef = (source: string, externalId: string) => `${source}:${externalId}`;
+
+/** True when a record with this identity was deleted here, so it must not come back. */
+export async function wasDeleted(db: Db, kind: DeletionKind, ref: string): Promise<boolean> {
+  return Boolean(await db.prepare('SELECT 1 FROM deletions WHERE kind = ?1 AND ref = ?2').bind(kind, ref).first());
+}
+
+/** Statements that remove one record (and its index rows) and add it to the ledger. */
+async function deletionStatements(db: Db, kind: DeletionKind, id: string, now: string): Promise<Statement[] | null> {
+  const record = (k: DeletionKind, ref: string) =>
+    db.prepare('INSERT OR REPLACE INTO deletions (kind, ref, deleted_at) VALUES (?1, ?2, ?3)').bind(k, ref, now);
   switch (kind) {
     case 'project': {
-      if (!(await getProject(db, id))) return false;
-      await db.batch([
+      if (!(await getProject(db, id))) return null;
+      return [
+        record('project', id),
+        // Its sessions and files go with it (ON DELETE CASCADE), so they are listed too.
+        db.prepare("INSERT OR REPLACE INTO deletions (kind, ref, deleted_at) SELECT 'checkpoint', id, ?2 FROM checkpoints WHERE project_id = ?1").bind(id, now),
+        db.prepare("INSERT OR REPLACE INTO deletions (kind, ref, deleted_at) SELECT 'artifact', id, ?2 FROM artifacts WHERE project_id = ?1").bind(id, now),
         // Chats that belonged to the project stay, unfiled; their search rows lose the project tag.
         db.prepare("UPDATE search_map SET project_id = NULL WHERE kind = 'message' AND project_id = ?1").bind(id),
         db.prepare('DELETE FROM search_fts WHERE rowid IN (SELECT id FROM search_map WHERE project_id = ?1)').bind(id),
         db.prepare('DELETE FROM search_map WHERE project_id = ?1').bind(id),
         db.prepare('DELETE FROM projects WHERE id = ?1').bind(id),
-      ]);
-      return true;
+      ];
     }
     case 'checkpoint':
     case 'artifact': {
       const table = kind === 'checkpoint' ? 'checkpoints' : 'artifacts';
-      if (!(await db.prepare(`SELECT 1 FROM ${table} WHERE id = ?1`).bind(id).first())) return false;
-      await db.batch([...unindex(db, kind, id), db.prepare(`DELETE FROM ${table} WHERE id = ?1`).bind(id)]);
-      return true;
+      if (!(await db.prepare(`SELECT 1 FROM ${table} WHERE id = ?1`).bind(id).first())) return null;
+      return [record(kind, id), ...unindex(db, kind, id), db.prepare(`DELETE FROM ${table} WHERE id = ?1`).bind(id)];
     }
     case 'profile': {
-      if (!(await db.prepare('SELECT 1 FROM profile WHERE key = ?1').bind(id).first())) return false;
-      await db.batch([...unindex(db, 'profile', id), db.prepare('DELETE FROM profile WHERE key = ?1').bind(id)]);
-      return true;
+      if (!(await db.prepare('SELECT 1 FROM profile WHERE key = ?1').bind(id).first())) return null;
+      return [record('profile', id), ...unindex(db, 'profile', id), db.prepare('DELETE FROM profile WHERE key = ?1').bind(id)];
     }
     case 'conversation': {
-      if (!(await getConversation(db, id))) return false;
-      await db.batch([...unindex(db, 'message', id), db.prepare('DELETE FROM conversations WHERE id = ?1').bind(id)]);
-      return true;
+      const chat = await getConversation(db, id);
+      if (!chat) return null;
+      return [record('conversation', chatRef(chat.source, chat.external_id)), ...unindex(db, 'message', id), db.prepare('DELETE FROM conversations WHERE id = ?1').bind(id)];
     }
   }
+}
+
+export type ForgetKind = DeletionKind;
+
+/**
+ * Permanently delete one stored item and everything indexed for it, and record the deletion so
+ * imports, restores and copies cannot bring it back. Returns false if it did not exist.
+ */
+export async function forget(db: Db, kind: ForgetKind, id: string): Promise<boolean> {
+  const statements = await deletionStatements(db, kind, id, nowIso());
+  if (!statements) return false;
+  await db.batch(statements);
+  return true;
 }
 
 // ---------------------------------------------------------------------- export
@@ -750,6 +782,7 @@ export const EXPORT_TABLES = [
   'profile',
   'conversations',
   'messages',
+  'deletions',
 ] as const;
 
 /** One page of a table, for taking your data out. `after` is the last rowid already seen. */
@@ -764,7 +797,7 @@ export async function exportPage(db: Db, table: (typeof EXPORT_TABLES)[number], 
 
 // ---------------------------------------------------------------------- import
 
-export const IMPORT_TABLES = ['projects', 'brief_versions', 'checkpoints', 'artifacts', 'profile'] as const;
+export const IMPORT_TABLES = ['deletions', 'projects', 'brief_versions', 'checkpoints', 'artifacts', 'profile'] as const;
 export type ImportTable = (typeof IMPORT_TABLES)[number];
 
 /** A row the caller sent is malformed; the message says which field and what to fix. */
@@ -778,6 +811,8 @@ export interface ImportResult {
   kept: number;
   /** Rows whose project is on neither side. */
   skipped: number;
+  /** Rows not added because they were deleted on the destination, plus (for the ledger itself) records it removed. */
+  deleted: number;
   notes: string[];
   /** Source project id -> destination project id, for the rows that follow. */
   idMap: Record<string, string>;
@@ -797,7 +832,7 @@ export async function importRows(
   rows: Row[],
   options: { replace?: boolean; dryRun?: boolean; idMap?: Record<string, string> } = {},
 ): Promise<ImportResult> {
-  const out: ImportResult = { inserted: 0, same: 0, replaced: 0, kept: 0, skipped: 0, notes: [], idMap: { ...options.idMap } };
+  const out: ImportResult = { inserted: 0, same: 0, replaced: 0, kept: 0, skipped: 0, deleted: 0, notes: [], idMap: { ...options.idMap } };
   const statements: Statement[] = [];
   const touched = new Set<string>();
   const note = (line: string) => {
@@ -826,7 +861,48 @@ export async function importRows(
 
   for (const row of rows) {
     if (typeof row !== 'object' || row === null) throw new ImportError(`Each ${table} row must be an object.`);
+    // Something deleted here never comes back through an import, restore or copy.
+    const identity: [DeletionKind, unknown] | null =
+      table === 'projects' ? ['project', row.id]
+      : table === 'checkpoints' ? ['checkpoint', row.id]
+      : table === 'artifacts' ? ['artifact', row.id]
+      : table === 'profile' ? ['profile', row.key]
+      : null;
+    if (identity && typeof identity[1] === 'string' && (await wasDeleted(db, identity[0], identity[1]))) {
+      out.deleted++;
+      continue;
+    }
     switch (table) {
+      case 'deletions': {
+        const kind = text(row, 'kind') as DeletionKind;
+        if (!DELETION_KINDS.includes(kind)) throw new ImportError(`deletions row has an unknown kind "${kind}".`);
+        const ref = text(row, 'ref');
+        const at = date(row, 'deleted_at');
+        if (await wasDeleted(db, kind, ref)) {
+          out.same++;
+          break;
+        }
+        out.inserted++;
+        // Remove the record here too, if this memory still has it.
+        let localId: string | null = ref;
+        if (kind === 'conversation') {
+          const split = ref.indexOf(':');
+          const found = await db
+            .prepare('SELECT id FROM conversations WHERE source = ?1 AND external_id = ?2')
+            .bind(ref.slice(0, split), ref.slice(split + 1))
+            .first<{ id: string }>();
+          localId = found?.id ?? null;
+        }
+        const removal = localId ? await deletionStatements(db, kind, localId, at) : null;
+        if (removal) {
+          out.deleted++;
+          note(`removed ${kind} ${ref}: it was deleted on the source`);
+          statements.push(...removal);
+        } else {
+          statements.push(db.prepare('INSERT OR IGNORE INTO deletions (kind, ref, deleted_at) VALUES (?1, ?2, ?3)').bind(kind, ref, at));
+        }
+        break;
+      }
       case 'projects': {
         const id = text(row, 'id');
         const slug = text(row, 'slug');

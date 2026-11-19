@@ -31,10 +31,11 @@ const CANONICAL: Record<string, { cols: string; order: string; from?: string }> 
     from: 'messages m',
     order: 'conv, seq',
   },
+  deletions: { cols: 'kind, ref, deleted_at', order: 'kind, ref' },
 };
 
 export interface Manifest {
-  format: 1;
+  format: 2;
   made_by: string;
   created_at: string;
   source: string;
@@ -51,9 +52,17 @@ export function manifestOf(file: string, source = file): Manifest {
   try {
     const tables: Manifest['tables'] = {};
     const total = createHash('sha256');
+    const present = new Set((db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name));
     for (const [table, spec] of Object.entries(CANONICAL)) {
       const hash = createHash('sha256');
       let rows = 0;
+      // Files from before a table existed (e.g. deletions, schema 3) count it as empty.
+      if (!present.has(table)) {
+        const digest = hash.digest('hex');
+        tables[table] = { rows: 0, sha256: digest };
+        total.update(`${table}:${digest}\n`);
+        continue;
+      }
       const stmt = db.prepare(`SELECT ${spec.cols} FROM ${spec.from ?? table} ORDER BY ${spec.order}`);
       stmt.setReturnArrays?.(true);
       for (const row of stmt.iterate() as Iterable<unknown>) {
@@ -69,7 +78,7 @@ export function manifestOf(file: string, source = file): Manifest {
     const integrity = String((db.prepare('PRAGMA integrity_check').get() as Record<string, unknown>).integrity_check);
     const schema = Number((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version);
     return {
-      format: 1,
+      format: 2,
       made_by: `legendary-memory ${VERSION}`,
       created_at: new Date().toISOString(),
       source,

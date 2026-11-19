@@ -478,7 +478,7 @@ export function buildServer(
         label = `project "${found.match.name}"`;
       }
       const removed = await store.forget(db, kind as store.ForgetKind, target);
-      return removed ? ok(`Deleted ${label}. This cannot be undone.`) : fail(`Nothing is stored under ${ref}.`);
+      return removed ? ok(`Deleted ${label}. This cannot be undone, and it will not come back from backups, imports or copies.`) : fail(`Nothing is stored under ${ref}.`);
     }),
   );
 
