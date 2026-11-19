@@ -14,7 +14,8 @@ tested, not merged or deployed. Nothing below has been deployed to the Cloudflar
 | P2 Duplicate work + incomplete search | **Done** (draft PRs #5, #6) | `P2-incremental-import-…`, `P2-search-index-v2-…`: 100K DB 719 → 430 MiB, re-import rewrites 106,601 → 130 rows, text past 8,000 chars 0/20 → 20/20 |
 | P2.5 Bounded caches/logs, low disk | Partly | `compact` refuses when disk is short; quota admission not started |
 | P3 Deletions survive restore/copy | **Done** (draft PR #7) | `hub/test/deletions.mjs` |
-| P3 Import preview / cancel / resume, portable archive, verified transfer | Not started | — |
+| P3 Portable archive + verified restore | **Done** (draft PR #9) | `P3-portable-archive-2026-11-19.md`, `hub/test/archive.mjs` |
+| P3 Import preview / cancel / resume, verified transfer | Not started | — |
 | P4 Local browser UI guards | **Done** for `serve` (draft PR #8) | `hub/test/local-guards.mjs` + existing `ui.mjs`, `host-ui.mjs` |
 | P4 Per-connection credentials, scopes, revocation | Not started | — |
 | P5–P13 | Not started | — |
@@ -22,7 +23,7 @@ tested, not merged or deployed. Nothing below has been deployed to the Cloudflar
 ## Draft PR stack (merge in order)
 
 #2 P0 evidence → #3 backup → #4 P1 contract/fixtures → #5 incremental import → #6 search v2 →
-#7 deletion ledger → #8 local guards.
+#7 deletion ledger → #8 local guards → #9 portable archive.
 
 ## Deploying to the personal Cloudflare hub (needs Daniel's go-ahead)
 

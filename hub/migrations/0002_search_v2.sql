@@ -23,6 +23,8 @@ CREATE VIRTUAL TABLE search_fts USING fts5(
   tokenize = 'porter unicode61 remove_diacritics 2'
 );
 
+-- REBUILD: everything below rebuilds the index from the canonical tables. Restoring an archive
+-- runs the same statements (src/local/archive.ts), so keep them self-contained.
 -- What every record indexes, in one place for the rebuild.
 CREATE TABLE _search_rebuild (
   kind TEXT NOT NULL, ref_id TEXT NOT NULL, project_id TEXT, seq INTEGER NOT NULL,

@@ -25,7 +25,8 @@ const CANONICAL: Record<string, { cols: string; order: string; from?: string }> 
   checkpoints: { cols: 'id, project_id, source, title, summary, decisions, next_steps, created_at', order: 'id' },
   artifacts: { cols: 'id, project_id, name, kind, content, version, source, created_at, updated_at', order: 'id' },
   profile: { cols: 'key, value, updated_at', order: 'key' },
-  conversations: { cols: 'id, source, external_id, project_id, title, url, started_at, updated_at, message_count', order: 'source, external_id' },
+  // A chat's identity is (source, external_id); its local id differs between homes, so it is not hashed.
+  conversations: { cols: 'source, external_id, project_id, title, url, started_at, updated_at, message_count', order: 'source, external_id' },
   messages: {
     cols: "(SELECT source || char(0) || external_id FROM conversations c WHERE c.id = m.conversation_id) AS conv, seq, role, text",
     from: 'messages m',

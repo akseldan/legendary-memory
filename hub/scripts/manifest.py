@@ -21,7 +21,7 @@ CANONICAL = {
     "checkpoints": ("id, project_id, source, title, summary, decisions, next_steps, created_at", "id"),
     "artifacts": ("id, project_id, name, kind, content, version, source, created_at, updated_at", "id"),
     "profile": ("key, value, updated_at", "key"),
-    "conversations": ("id, source, external_id, project_id, title, url, started_at, updated_at, message_count", "source, external_id"),
+    "conversations": ("source, external_id, project_id, title, url, started_at, updated_at, message_count", "source, external_id"),
     "messages": ("(SELECT source || char(0) || external_id FROM conversations c WHERE c.id = m.conversation_id) AS conv, seq, role, text", "conv, seq"),
     "deletions": ("kind, ref, deleted_at", "kind, ref"),
 }
@@ -46,7 +46,12 @@ def manifest(path: str) -> dict:
         out["tables"][table] = {"rows": n, "sha256": h.hexdigest()}
         total.update(f"{table}:{h.hexdigest()}\n".encode())
     for table in DERIVED:
-        out["derived"][table] = db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        try:
+            out["derived"][table] = db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        except sqlite3.OperationalError:
+            # The v2 index uses FTS5 options (contentless_delete, SQLite 3.43+) that an older
+            # SQLite cannot open. It is derived data, so the canonical hash does not need it.
+            out["derived"][table] = None
     out["memory_sha256"] = total.hexdigest()
     out["integrity_check"] = db.execute("PRAGMA integrity_check").fetchone()[0]
     db.close()
@@ -62,6 +67,6 @@ if __name__ == "__main__":
         for t, v in m["tables"].items():
             print(f"  {t:15} {v['rows']:>6}  {v['sha256'][:16]}")
         for t, n in m["derived"].items():
-            print(f"  {t:15} {n:>6}  (derived)")
+            print(f"  {t:15} {n if n is not None else 'n/a':>6}  (derived)")
         print(f"  memory sha256   {m['memory_sha256']}")
         print(f"  integrity       {m['integrity_check']}")
