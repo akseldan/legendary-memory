@@ -1,4 +1,7 @@
 name: pages
+# Publishes site/ (landing page and install.sh) to https://akseldan.github.io/legendary-memory/.
+# If a run fails on GitHub's side (e.g. "No artifacts named github-pages"), re-run it or push
+# any change under site/ or to this file.
 on:
   push:
     branches: [main]
