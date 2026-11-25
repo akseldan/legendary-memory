@@ -1,6 +1,6 @@
 import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 
-export { SCOPE_READ, SCOPE_WRITE, VERSION, type ConnectionProps } from '../core/constants';
+export { SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION, type ConnectionProps } from '../core/constants';
 
 export interface Env {
   DB: D1Database;

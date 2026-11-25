@@ -4,6 +4,7 @@
  *
  *   /mcp         the tools AI apps call (needs a token from the sign-in below)
  *   /authorize   the sign-in page where you approve an app
+ *   /connections the owner's list of connected apps, with last use and disconnect
  *   /oauth/*     token and registration endpoints, handled by the OAuth library
  *   /api/*       importer and browser-extension API (needs BRIDGE_API_KEY)
  */
@@ -12,7 +13,8 @@ import { handleApi } from '../core/api';
 import type { Db } from '../core/db';
 import { handleMcpRequest } from '../core/mcp';
 import { handleAuthorize } from './auth';
-import { type ConnectionProps, type Env, SCOPE_READ, SCOPE_WRITE, VERSION } from './env';
+import { grantIdOf, handleConnections, recordUse } from './connections';
+import { type ConnectionProps, type Env, SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION } from './env';
 
 /** D1 already has the shape the core needs; this cast only bridges two type definitions. */
 const dbOf = (env: Env): Db => env.DB as unknown as Db;
@@ -20,7 +22,12 @@ const dbOf = (env: Env): Db => env.DB as unknown as Db;
 /** Handles POST /mcp for a request the OAuth layer has already authenticated. */
 const mcpHandler = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const context = ctx as ExecutionContext & { props?: ConnectionProps; auth?: { scope?: string[] } };
+    const context = ctx as ExecutionContext & { props?: ConnectionProps; auth?: { scope?: string[]; token?: string } };
+    const grant = grantIdOf(context.auth?.token);
+    if (grant) {
+      // Bookkeeping only: never delay or fail the request because of it.
+      ctx.waitUntil(recordUse(dbOf(env), grant, context.props?.client ?? '').catch(() => undefined));
+    }
     return handleMcpRequest(request, dbOf(env), context.props ?? { client: '' }, context.auth?.scope ?? []);
   },
 };
@@ -31,6 +38,7 @@ const defaultHandler = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname === '/authorize') return handleAuthorize(request, env);
+    if (pathname === '/connections') return handleConnections(request, env, dbOf(env));
     if (pathname.startsWith('/api/')) return handleApi(request, { db: dbOf(env), apiKey: env.BRIDGE_API_KEY });
     if (pathname === '/') {
       return new Response(`Legendary Memory hub v${VERSION}. Add this address plus /mcp as a connector in your AI app.\n`, {
@@ -61,7 +69,7 @@ function buildProvider(origin: string, env: Env): OAuthProvider<Env> {
     tokenEndpoint: '/oauth/token',
     clientRegistrationEndpoint: '/oauth/register',
     clientIdMetadataDocumentEnabled: env.DISABLE_CIMD !== '1',
-    scopesSupported: [SCOPE_READ, SCOPE_WRITE, 'offline_access'],
+    scopesSupported: [SCOPE_READ, SCOPE_WRITE, SCOPE_DELETE, 'offline_access'],
     requiredScopes: [SCOPE_READ, SCOPE_WRITE],
     resourceMetadata: {
       resource: `${origin}/mcp`,

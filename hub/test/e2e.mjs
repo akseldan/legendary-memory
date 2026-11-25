@@ -176,7 +176,7 @@ console.log('Registration allowlist');
 }
 
 console.log('Sign-in and tools');
-const token = await signIn(['memory:read', 'memory:write']);
+const token = await signIn(['memory:read', 'memory:write', 'memory:delete']);
 check('full sign-in yields a token', !!token);
 
 {
@@ -269,6 +269,27 @@ check('full sign-in yields a token', !!token);
 
   const forgetFuzzy = await call(token, 'forget', { ref: 'project:Coolng System' });
   check('forget refuses a typo project name', forgetFuzzy.isError && /nothing was deleted/i.test(forgetFuzzy.text), forgetFuzzy.text);
+}
+
+console.log('Permissions: deleting is its own choice');
+{
+  const page = await startAuthorize((await register()).body.client_id);
+  check('the approval page offers deleting, unchecked', /value="memory:delete"(?! checked)/.test(page.html) && /Delete from your memory/.test(page.html), page.html.slice(0, 300));
+  check('and offers read and save, checked', /value="memory:read" checked/.test(page.html) && /value="memory:write" checked/.test(page.html));
+  const saver = await signIn(['memory:read', 'memory:write']);
+  const saved = await call(saver, 'save_artifact', { project: 'Cooling System', name: 'temp.md', content: 'disposable' });
+  check('a read+save connection can save', /Saved|version/.test(saved.text) && !saved.isError, saved.text);
+  const id = saved.text.match(/artifact:([0-9a-f-]+)/)?.[1];
+  const refused = await call(saver, 'forget', { ref: `artifact:${id}` });
+  check('but cannot delete', refused.isError && /not allowed to delete/.test(refused.text), refused.text);
+  const still = await call(saver, 'read', { ref: `artifact:${id}` });
+  check('and the item is still there', !still.isError, still.text);
+  const deleter = await signIn(['memory:read', 'memory:write', 'memory:delete']);
+  const gone = await call(deleter, 'forget', { ref: `artifact:${id}` });
+  check('a connection allowed to delete can', /Deleted/.test(gone.text), gone.text);
+  const sneaky = await signIn(['memory:read', 'memory:admin']);
+  const sneakyWrite = await call(sneaky, 'save_checkpoint', { project: 'Cooling System', title: 'x', summary: 'x' });
+  check('unknown permissions in the form are ignored', sneakyWrite.isError, sneakyWrite.text);
 }
 
 console.log('Read-only connection');

@@ -6,7 +6,7 @@ import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/sdk/validatio
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { type ConnectionProps, SCOPE_WRITE, VERSION } from './constants';
+import { type ConnectionProps, SCOPE_WRITE, VERSION, canDelete } from './constants';
 import type { Db } from './db';
 import * as store from './store';
 import { clamp, day, slugify } from './text';
@@ -71,6 +71,7 @@ export function buildServer(
   clientName: () => string = () => props?.client ?? '',
 ): McpServer {
   const canWrite = scopes.includes(SCOPE_WRITE);
+  const mayDelete = canDelete(scopes, props);
   const source = () => sourceLabel(clientName());
   const server = new McpServer(
     { name: 'legendary-memory', title: 'Legendary Memory', version: VERSION },
@@ -100,9 +101,12 @@ export function buildServer(
 
   /** Runs a tool body; unexpected failures become a plain error instead of leaking internals. */
   const guarded =
-    <Args>(name: string, write: boolean, body: (args: Args) => Promise<ToolResult>) =>
+    <Args>(name: string, write: boolean | 'delete', body: (args: Args) => Promise<ToolResult>) =>
     async (args: Args): Promise<ToolResult> => {
-      if (write && !canWrite) return fail('This connection is read-only, so nothing was saved.');
+      if (write === 'delete' && !mayDelete) {
+        return fail('This connection is not allowed to delete, so nothing was deleted. The owner can allow deleting by reconnecting this app.');
+      }
+      if (write === true && !canWrite) return fail('This connection is read-only, so nothing was saved.');
       try {
         return await body(args);
       } catch (error) {
@@ -457,7 +461,7 @@ export function buildServer(
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
-    guarded('forget', true, async ({ ref }) => {
+    guarded('forget', 'delete', async ({ ref }) => {
       const [kind, id] = splitRef(ref);
       if (!['project', 'checkpoint', 'artifact', 'conversation', 'profile'].includes(kind) || !id) {
         return fail('A ref looks like project:<name>, checkpoint:<id>, artifact:<id>, conversation:<id> or profile:<key>.');

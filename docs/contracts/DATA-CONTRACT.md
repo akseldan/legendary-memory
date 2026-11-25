@@ -103,7 +103,7 @@ Three version numbers, changed independently:
 | write | `save_checkpoint`, `save_artifact`, `remember` |
 | delete | `forget` (and account erase on hosted) |
 
-Current: local stdio grants read+write+delete; hosted OAuth issues read and write scopes, and `forget` needs write. Target: a separate delete scope where the client supports it; the server enforces scopes on every mutation regardless of client hints.
+**Implemented 2026-11-24 (PR #10):** the approval page offers read, save and delete separately (delete unchecked by default); the server enforces them on every tool call. Connections approved before this keep "write implies delete" (they carry no `v: 2`), so existing apps do not break. Local stdio and `serve` keep all three.
 
 ## 9. Limits that are part of the contract
 

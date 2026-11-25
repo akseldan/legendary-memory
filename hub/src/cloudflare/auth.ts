@@ -5,7 +5,7 @@
  * step: you see which app is asking and what for, type your passphrase, and allow or deny.
  */
 import { AuthorizationError, CimdFetchError, type ConsentDescription } from '@cloudflare/workers-oauth-provider';
-import { type ConnectionProps, type Env, SCOPE_READ, SCOPE_WRITE } from './env';
+import { type ConnectionProps, type Env, SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE } from './env';
 import { recordFailure, sameSecret, tooManyFailures } from '../core/lockout';
 import { escapeHtml } from '../core/text';
 
@@ -13,10 +13,12 @@ const OWNER_ID = 'owner';
 const MIN_PASSPHRASE_LENGTH = 12;
 
 
-const SCOPE_LABELS: Record<string, string> = {
-  [SCOPE_READ]: 'Read your memory',
-  [SCOPE_WRITE]: 'Save to and delete from your memory',
-};
+/** What the owner can allow, in order. Deleting is opt-in: it is the one change that loses data. */
+const SCOPE_CHOICES: { scope: string; label: string; checked: boolean }[] = [
+  { scope: SCOPE_READ, label: 'Read your memory', checked: true },
+  { scope: SCOPE_WRITE, label: 'Save to your memory', checked: true },
+  { scope: SCOPE_DELETE, label: 'Delete from your memory (only when you ask it to)', checked: false },
+];
 
 const PAGE_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
@@ -27,7 +29,7 @@ const PAGE_HEADERS = {
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
 };
 
-function page(title: string, body: string, status = 200, extra?: Headers): Response {
+export function page(title: string, body: string, status = 200, extra?: Headers): Response {
   const headers = new Headers(extra);
   for (const [name, value] of Object.entries(PAGE_HEADERS)) {
     // Keep the library's own policy too: a browser enforces every policy header it gets.
@@ -70,7 +72,7 @@ function page(title: string, body: string, status = 200, extra?: Headers): Respo
   return new Response(html, { status, headers });
 }
 
-const message = (title: string, text: string, status: number): Response =>
+export const message = (title: string, text: string, status: number): Response =>
   page(title, `<h1>${escapeHtml(title)}</h1><p>${escapeHtml(text)}</p>`, status);
 
 function consentForm(details: ConsentDescription, handle: string): string {
@@ -78,14 +80,11 @@ function consentForm(details: ConsentDescription, handle: string): string {
   const origin = details.clientDomain
     ? `Published by <strong>${escapeHtml(details.clientDomain)}</strong>.`
     : 'This app registered itself, so its name is not verified.';
-  const requested = details.scope.filter((scope) => scope in SCOPE_LABELS);
-  const offered = requested.length > 0 ? requested : [SCOPE_READ, SCOPE_WRITE];
-  const scopes = offered
-    .map(
-      (scope) =>
-        `<label class="check"><input type="checkbox" name="scope" value="${escapeHtml(scope)}" checked> <span>${escapeHtml(SCOPE_LABELS[scope]!)}</span></label>`,
-    )
-    .join('');
+  // Every choice is offered whatever the app asked for: apps usually ask for read and write only.
+  const scopes = SCOPE_CHOICES.map(
+    ({ scope, label, checked }) =>
+      `<label class="check"><input type="checkbox" name="scope" value="${escapeHtml(scope)}"${checked ? ' checked' : ''}> <span>${escapeHtml(label)}</span></label>`,
+  ).join('');
   const passthrough = details.scope.includes('offline_access') ? '<input type="hidden" name="scope" value="offline_access">' : '';
   const local = details.redirectIsLoopback
     ? '<p class="warn"><strong>This sends access to an app on your computer.</strong> Continue only if you just started connecting from it.</p>'
@@ -141,14 +140,15 @@ export async function handleAuthorize(request: Request, env: Env): Promise<Respo
       return message('Wrong passphrase', 'That passphrase is not right. Go back and try again.', 401);
     }
 
-    const scope = form.getAll('scope').map(String);
+    const known = new Set([...SCOPE_CHOICES.map((c) => c.scope), 'offline_access']);
+    const scope = form.getAll('scope').map(String).filter((s) => known.has(s));
     const approved = await oauth.approveConsent(request, handle, { scope });
     const client = (await oauth.lookupClient(approved.request.clientId))?.clientName ?? '';
-    const props: ConnectionProps = { client };
+    const props: ConnectionProps = { client, v: 2 };
     const { redirectTo } = await oauth.completeAuthorization({
       request: approved.request,
       userId: OWNER_ID,
-      metadata: { client },
+      metadata: { client, v: 2 },
       scope: approved.request.scope,
       props,
     });

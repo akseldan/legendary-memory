@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { SCOPE_READ, SCOPE_WRITE, VERSION } from '../core/constants';
+import { SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION } from '../core/constants';
 import { buildServer } from '../core/mcp';
 import { MIN_PASSPHRASE_LENGTH, apiKey, dataDir, dbPath, passphrase, signInDbPath } from './config';
 import { startServer } from './server';
@@ -117,7 +117,7 @@ async function main(): Promise<void> {
     }
     case 'stdio': {
       const db = openDatabase(dbPath());
-      const server = buildServer(db, { client: '' }, [SCOPE_READ, SCOPE_WRITE], () => server.server.getClientVersion()?.name ?? '');
+      const server = buildServer(db, { client: '' }, [SCOPE_READ, SCOPE_WRITE, SCOPE_DELETE], () => server.server.getClientVersion()?.name ?? '');
       await server.connect(new StdioServerTransport());
       return; // stdout belongs to the protocol; log only to stderr
     }

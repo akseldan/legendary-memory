@@ -7,7 +7,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { handleApi } from '../core/api';
-import { SCOPE_READ, SCOPE_WRITE } from '../core/constants';
+import { SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE } from '../core/constants';
 import type { Db } from '../core/db';
 import { handleMcpRequest } from '../core/mcp';
 import { type UiOptions, handleUi } from './ui';
@@ -71,6 +71,7 @@ export function startServer(db: Db, key: string, port: number, ui?: UiOptions): 
         response = await handleMcpRequest(request, db, { client: String(req.headers['user-agent'] ?? '') }, [
           SCOPE_READ,
           SCOPE_WRITE,
+          SCOPE_DELETE,
         ]);
       } else {
         response = await handleApi(request, { db, apiKey: key });
