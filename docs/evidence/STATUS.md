@@ -33,7 +33,7 @@ deletion records. Contentless FTS5 confirmed working on production D1.
 | P4 Local browser UI guards | **Done** for `serve` (draft PR #8) | `hub/test/local-guards.mjs` + existing `ui.mjs`, `host-ui.mjs` |
 | P4 Per-connection permissions, last use, disconnect | **Done and deployed 2026-11-24** (PR #10, Worker 02fcc751) | `hub/test/connections.mjs` (19), e2e permission checks (47 total), `permissions.test.ts` |
 | P5 Local install lifecycle (macOS arm64, Linux x64/arm64) and self-host backup/restore | **Done** (draft PR #13); Windows not supported by install.sh | `P5-installer-linux-2026-11-25.md` |
-| P6 compatibility matrix | In progress: matrix drafted from hub records + current app docs; per-app retests pending (Daniel) | [COMPATIBILITY.md](../COMPATIBILITY.md) |
+| P6 compatibility matrix | Done 2026-11-25: six surfaces verified (6/6 test codes on the hub, saved by claude/chatgpt/codex) | [COMPATIBILITY.md](../COMPATIBILITY.md) |
 | P7–P13 | Not started | — |
 
 ## PR stack (merged into main 2026-11-25 by fast-forward; #3–#13 closed with a note)

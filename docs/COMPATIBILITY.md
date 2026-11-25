@@ -12,12 +12,12 @@ app's docs say yes, untested here) · **Unavailable** (the app or plan cannot co
 
 | App and surface | Plan tested | Status | Read | Save | Notes |
 |---|---|---|---|---|---|
-| Claude web (claude.ai) | Paid (owner) | **Verified** 2026-11-17 → 11-25 | yes | yes | Custom connector with the hub's `/mcp` address. 43 saves recorded from Claude since 2026-11-12. |
-| Claude Desktop (Mac) | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Same account connector as the web; this release was tested from it. |
-| Claude iPhone / iPad | Paid (owner) | Verified for the owner on 2026-11-16; **retest pending** with the Mac off | — | — | Claude's docs: phones use connectors added on web or desktop; adding one on the phone is not the main path. |
-| ChatGPT web (developer mode) | Plus (owner) | **Preview**: saves recorded 2026-11-15; **retest pending** | — | — | OpenAI's docs disagree about whether Plus can save (write) or only read. Test on the plan you have. |
-| ChatGPT iPhone | Plus (owner) | **Retest pending** | — | — | Developer-mode apps are documented for the web. |
-| Codex (CLI / IDE / ChatGPT desktop app) | Plus (owner) | **Retest pending**: connected 2026-11-16, no saves recorded | — | — | Add the hub as a Streamable HTTP server, then `codex mcp login <name>`. One config is shared by the CLI, IDE extension and ChatGPT desktop app. |
+| Claude web (claude.ai) | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Custom connector with the hub's `/mcp` address. Test code CT-CLW-7341. |
+| Claude Desktop (Mac) | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Same account connector as the web. CT-CLD-2958. |
+| Claude iPhone | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Uses the connector added on web/desktop. CT-CLI-8170 (the app saved the title with angle brackets; stored exactly as sent). |
+| ChatGPT web (developer mode) | Plus (owner) | **Verified** 2026-11-25 | yes | yes | Saving works on Plus, even though some OpenAI docs say write actions need Business/Enterprise. CT-GPW-6612. |
+| ChatGPT iPhone | Plus (owner) | **Verified** 2026-11-25 | yes | yes | Uses the app enabled on the web. CT-GPI-5523. |
+| Codex | Plus (owner) | **Verified** 2026-11-25 | yes | yes | Streamable HTTP server + `codex mcp login <name>`; recorded as source `codex`. CT-CDX-4087. |
 | Gemini, Cursor, others | — | Documented / untested | — | — | MCP clients generally can connect; not tested. |
 
 ## On this computer (no account) — desktop apps over stdio
