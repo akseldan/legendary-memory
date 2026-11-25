@@ -5,6 +5,7 @@
 import { VERSION } from './constants';
 import type { Db } from './db';
 import * as store from './store';
+import { admitWrite } from './limits';
 
 const MAX_BODY_BYTES = 1_500_000;
 const MAX_MESSAGES = 2000;
@@ -120,6 +121,8 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
   if (request.method === 'POST' && (url.pathname === '/api/ingest/conversation' || url.pathname === '/api/import')) {
     const moved = await store.getMoved(db);
     if (moved) return problem(409, store.movedMessage(moved));
+    const admission = await admitWrite(Number(request.headers.get('Content-Length') ?? 0) || 0);
+    if (!admission.ok) return problem(507, admission.message);
   }
 
   if (url.pathname === '/api/ingest/conversation' && request.method === 'POST') {

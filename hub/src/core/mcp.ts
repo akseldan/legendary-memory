@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { type ConnectionProps, SCOPE_WRITE, VERSION, canDelete } from './constants';
 import type { Db } from './db';
 import * as store from './store';
+import { admitWrite } from './limits';
 import { clamp, day, slugify } from './text';
 
 const INSTRUCTIONS =
@@ -111,8 +112,19 @@ export function buildServer(
         const moved = await store.getMoved(db);
         if (moved) return fail(store.movedMessage(moved));
       }
+      // Space is checked for saves only: deleting is how you make room.
+      let note: string | undefined;
+      if (write === true) {
+        const admission = await admitWrite(JSON.stringify(args ?? {}).length);
+        if (!admission.ok) return fail(admission.message);
+        note = admission.note;
+      }
       try {
-        return await body(args);
+        const result = await body(args);
+        if (note && !result.isError && result.content[0]?.type === 'text') {
+          result.content[0] = { ...result.content[0], text: `${result.content[0].text}\n\n${note}` };
+        }
+        return result;
       } catch (error) {
         console.error(`tool ${name} failed:`, error instanceof Error ? error.message : 'unknown error');
         return fail(`Legendary Memory could not complete ${name}. Nothing was changed. Try again.`);

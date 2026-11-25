@@ -15,4 +15,6 @@ export interface Env {
   OWNER_PASSPHRASE?: string;
   /** Secret: bearer key for /api/* (importer, browser extension). Unset = API off. */
   BRIDGE_API_KEY?: string;
+  /** Optional allowance for this memory in MB. Unset: none. */
+  QUOTA_MB?: string;
 }

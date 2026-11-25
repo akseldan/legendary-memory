@@ -9,6 +9,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { Db } from '../core/db';
 import * as store from '../core/store';
+import { admitWrite } from '../core/limits';
 import type { SetupResult } from './setup';
 
 export interface UiOptions {
@@ -124,6 +125,10 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
   if (route === 'POST /ui/brief' || route === 'POST /ui/forget') {
     const moved = await store.getMoved(db);
     if (moved) return json({ error: store.movedMessage(moved) }, 409);
+  }
+  if (route === 'POST /ui/brief') {
+    const admission = await admitWrite(Number(request.headers.get('Content-Length') ?? 0) || 0);
+    if (!admission.ok) return json({ error: admission.message }, 507);
   }
   if (route === 'POST /ui/brief') {
     const body = (await request.json().catch(() => ({}))) as { id?: unknown; brief?: unknown };

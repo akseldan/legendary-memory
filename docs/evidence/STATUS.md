@@ -20,10 +20,10 @@ deletion records. Contentless FTS5 confirmed working on production D1.
 | First package #2 Backup correctness | **Done** (draft PR #3; running on Daniel's Mac) | `hub/test/backup.mjs`; weekly `backup.sh` uses it |
 | P2 Measure growth and speed | **Done** for local | Benchmarks in P1/P2 evidence; hosted footprint pending P7 |
 | P2 Duplicate work + incomplete search | **Done** (draft PRs #5, #6) | `P2-incremental-import-…`, `P2-search-index-v2-…`: 100K DB 719 → 430 MiB, re-import rewrites 106,601 → 130 rows, text past 8,000 chars 0/20 → 20/20 |
-| P2.5 Bounded caches/logs, low disk | Partly | `compact` refuses when disk is short; quota admission not started |
+| P2.5 Limits, low disk, idle cost | **Done** (draft PR #12) | `P2.5-limits-2026-11-24.md`, `hub/test/limits.mjs` |
 | P3 Deletions survive restore/copy | **Done** (draft PR #7) | `hub/test/deletions.mjs` |
 | P3 Portable archive + verified restore | **Done** (draft PR #9) | `P3-portable-archive-2026-11-19.md`, `hub/test/archive.mjs` |
-| P3 Verified home transfer (`move`, `move --undo`) | **Done** (draft PR #11; hub part not deployed) | `hub/test/move.mjs` (25) |
+| P3 Verified home transfer (`move`, `move --undo`) | **Done and deployed 2026-11-25** (PR #11) | `hub/test/move.mjs` (25) |
 | P3 Import preview / cancel / resume | Deferred by Daniel (2026-11-24) | — |
 | P4 Local browser UI guards | **Done** for `serve` (draft PR #8) | `hub/test/local-guards.mjs` + existing `ui.mjs`, `host-ui.mjs` |
 | P4 Per-connection permissions, last use, disconnect | **Done and deployed 2026-11-24** (PR #10, Worker 02fcc751) | `hub/test/connections.mjs` (19), e2e permission checks (47 total), `permissions.test.ts` |
@@ -32,7 +32,7 @@ deletion records. Contentless FTS5 confirmed working on production D1.
 ## Draft PR stack (merge in order)
 
 #2 P0 evidence → #3 backup → #4 P1 contract/fixtures → #5 incremental import → #6 search v2 →
-#7 deletion ledger → #8 local guards → #9 portable archive → #10 permissions and connections page → #11 move.
+#7 deletion ledger → #8 local guards → #9 portable archive → #10 permissions and connections page → #11 move → #12 limits.
 
 ## Deploying to the personal Cloudflare hub (done 2026-11-24; kept for the next deploy)
 

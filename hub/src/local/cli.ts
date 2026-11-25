@@ -81,6 +81,7 @@ function openInBrowser(address: string): void {
 }
 
 async function main(): Promise<void> {
+  (await import('./limits')).configureLocalLimits();
   switch (command) {
     case 'start': {
       const db = openDatabase(dbPath());

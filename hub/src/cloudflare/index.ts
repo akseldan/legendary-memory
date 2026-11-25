@@ -12,6 +12,7 @@ import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
 import { handleApi } from '../core/api';
 import type { Db } from '../core/db';
 import { handleMcpRequest } from '../core/mcp';
+import { currentLimits, setLimits } from '../core/limits';
 import { handleAuthorize } from './auth';
 import { grantIdOf, handleConnections, recordUse } from './connections';
 import { type ConnectionProps, type Env, SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION } from './env';
@@ -105,8 +106,25 @@ function publicOrigin(request: Request, env: Env): string {
   return configured || new URL(request.url).origin;
 }
 
+let limitsReady = false;
+/** D1 reports the database size after every query; a hub run by `host` keeps its own figures. */
+function configureLimits(env: Env): void {
+  if (limitsReady) return;
+  limitsReady = true;
+  const quota = Number(env.QUOTA_MB);
+  const own = currentLimits().size;
+  setLimits({
+    quotaBytes: Number.isFinite(quota) && quota > 0 ? quota * 1048576 : currentLimits().quotaBytes,
+    size: async () => {
+      const result = (await env.DB.prepare('SELECT 1').run()) as { meta?: { size_after?: number } } | undefined;
+      return result?.meta?.size_after ?? (own ? await own() : null);
+    },
+  });
+}
+
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    configureLimits(env);
     const origin = publicOrigin(request, env);
     let provider = providers.get(origin);
     if (!provider) {
