@@ -27,12 +27,13 @@ deletion records. Contentless FTS5 confirmed working on production D1.
 | P3 Import preview / cancel / resume | Deferred by Daniel (2026-11-24) | — |
 | P4 Local browser UI guards | **Done** for `serve` (draft PR #8) | `hub/test/local-guards.mjs` + existing `ui.mjs`, `host-ui.mjs` |
 | P4 Per-connection permissions, last use, disconnect | **Done and deployed 2026-11-24** (PR #10, Worker 02fcc751) | `hub/test/connections.mjs` (19), e2e permission checks (47 total), `permissions.test.ts` |
-| P5–P13 | Not started | — |
+| P5 Local install lifecycle (macOS arm64, Linux x64/arm64) and self-host backup/restore | **Done** (draft PR #13); Windows not supported by install.sh | `P5-installer-linux-2026-11-25.md` |
+| P6–P13 | Not started | — |
 
 ## Draft PR stack (merge in order)
 
 #2 P0 evidence → #3 backup → #4 P1 contract/fixtures → #5 incremental import → #6 search v2 →
-#7 deletion ledger → #8 local guards → #9 portable archive → #10 permissions and connections page → #11 move → #12 limits.
+#7 deletion ledger → #8 local guards → #9 portable archive → #10 permissions and connections page → #11 move → #12 limits → #13 installer (supersedes #1).
 
 ## Deploying to the personal Cloudflare hub (done 2026-11-24; kept for the next deploy)
 

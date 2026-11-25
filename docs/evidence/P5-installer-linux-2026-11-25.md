@@ -23,6 +23,12 @@ Full suite with the installer merged: 19 suites green (installer test 44 checks)
 Same installer from the `p5-installer` branch, release assets from a temporary branch: install 4 s,
 **120 MiB**, version 1.1.0, save + search through the installed runtime, uninstall keeps memory.
 
+## Native macOS (Daniel's MacBook Pro, macOS 27.0.1, Apple Silicon)
+
+Run by Daniel with `installer-test-macos.sh` (temp HOME): install 4 s, **119 MiB** (runtime 117 MiB),
+PATH added to `.zshrc`, version 1.1.0, save + search through the installed runtime, re-run "already
+up to date", uninstall leaves only the memory files. Gatekeeper did not block the private runtime.
+
 ## Self-hosting (`host`, what the Docker image runs)
 
 `test/host.mjs` now also checks: a save after restart, a consistent backup taken while the server is
@@ -32,7 +38,6 @@ built here (no Docker daemon in the workspace).
 
 ## Still to do for P5
 
-- Native macOS: `~/.legendary-memory/installer-test-macos.sh` (temp HOME; touches nothing real).
 - Windows: `install.sh` is POSIX only; the `.mcpb` stays the Windows route until a PowerShell
   installer exists. Not advertised as supported.
 - Publish v1.1.0 so the real release URL replaces the test branch; then delete branch
