@@ -29,4 +29,13 @@ jobs:
       - name: Lint the installer
         if: runner.os == 'Linux'
         run: shellcheck -s sh ../site/install.sh
-      - run: npm run test:all
+      - name: Tests
+        shell: bash
+        # Failing checks become annotations, readable from the checks API without the full log.
+        run: |
+          set -o pipefail
+          npm run test:all 2>&1 | tee test.log || status=$?
+          if [ -n "${status-}" ]; then
+            grep -E "FAIL|failed|Error|error:|✗|×" test.log | grep -v ' 0 failed' | head -30 | sed 's/^/::error::/'
+            exit "$status"
+          fi
