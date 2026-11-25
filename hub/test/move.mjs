@@ -108,7 +108,8 @@ try {
 
   console.log('Undo after the new home changed');
   const second = join(root, 'second', 'memory.db');
-  check('a second move works', cli(['move', '--from', BASE, '--to', second, '--apply']).code === 0);
+  const secondMove = cli(['move', '--from', BASE, '--to', second, '--apply']);
+  check('a second move works', secondMove.code === 0, secondMove.all);
   // Something new lands in the new home.
   const extra = join(root, 'extra.db');
   const ex = spawnSync('node', [BIN, 'copy', '--from', full, '--to', extra, '--apply'], { env: env(cliHome) });

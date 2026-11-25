@@ -164,7 +164,10 @@ export async function runMove(options: { from: string; to: string; apply: boolea
     // Keep the moved memory as an archive too, in this computer's backups folder.
     const archiveDir = join(dataDir(), 'backups');
     mkdirSync(archiveDir, { recursive: true, mode: 0o700 });
-    const archive = join(archiveDir, `move-${at.slice(0, 19).replace(/[:T]/g, '-')}.lmarchive`);
+    // Down to the millisecond, and never reusing a name: two moves in one second must not collide.
+    const stem = join(archiveDir, `move-${at.replace(/[:.]/g, '-').replace(/Z$/, '')}`);
+    let archive = `${stem}.lmarchive`;
+    for (let n = 2; existsSync(archive); n++) archive = `${stem}-${n}.lmarchive`;
     await runExport({ from: snapshot, to: archive }, quiet);
 
     await from.setMoved({ to: to.label, at, memory_sha256: source.memory_sha256 });
