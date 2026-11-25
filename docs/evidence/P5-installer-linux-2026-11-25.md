@@ -18,5 +18,22 @@ program served from a local stand-in for the (not yet published) v1.1.0 GitHub r
 | Reinstall | finds the existing memory; recall works |
 
 Full suite with the installer merged: 19 suites green (installer test 44 checks).
-Still to do for P5: Linux arm64 (Daniel's Mac VM), native macOS (Daniel runs it with a temp HOME),
-Windows (not supported by `install.sh`; `.mcpb` remains the Windows route), self-host Docker restart.
+## Linux arm64 (Daniel's MacBook Pro, Claude desktop app's Linux VM)
+
+Same installer from the `p5-installer` branch, release assets from a temporary branch: install 4 s,
+**120 MiB**, version 1.1.0, save + search through the installed runtime, uninstall keeps memory.
+
+## Self-hosting (`host`, what the Docker image runs)
+
+`test/host.mjs` now also checks: a save after restart, a consistent backup taken while the server is
+serving, and a new server restored from that backup serves the memory to a newly signed-in app
+(16 checks). Restart and refresh-token survival were already covered. The Docker image itself was not
+built here (no Docker daemon in the workspace).
+
+## Still to do for P5
+
+- Native macOS: `~/.legendary-memory/installer-test-macos.sh` (temp HOME; touches nothing real).
+- Windows: `install.sh` is POSIX only; the `.mcpb` stays the Windows route until a PowerShell
+  installer exists. Not advertised as supported.
+- Publish v1.1.0 so the real release URL replaces the test branch; then delete branch
+  `installer-test-assets`.

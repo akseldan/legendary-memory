@@ -137,6 +137,28 @@ try {
     })).json();
     check('refresh token works after a restart', !!refreshed.access_token, JSON.stringify(refreshed));
 
+    // Back up while it serves, restore elsewhere (the Docker route: `docker compose exec memory node /app/legendary-memory.mjs backup ...`).
+    const save = await fetch(`${server.base}/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${refreshed.access_token}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'save_checkpoint', arguments: { project: 'Self Host', title: 'kept', summary: 'kept across backup and restore' } } }),
+    });
+    check('a save works on the restarted server', save.status === 200);
+    const backupFile = join(tempDir(), 'hosted.db');
+    const backup = spawnSync('node', [BIN, 'backup', '--from', join(dir, 'memory.db'), '--to', backupFile], { env: { ...process.env, NODE_NO_WARNINGS: '1', LEGENDARY_MEMORY_DIR: tempDir() }, encoding: 'utf8' });
+    check('a consistent backup can be taken while it serves', backup.status === 0 && /checkpoints\s+1/.test(backup.stdout), backup.stdout + backup.stderr);
+    const restoredDir = tempDir();
+    const restore = spawnSync('node', [BIN, 'copy', '--from', backupFile, '--to', join(restoredDir, 'memory.db'), '--apply'], { env: { ...process.env, NODE_NO_WARNINGS: '1', LEGENDARY_MEMORY_DIR: tempDir() }, encoding: 'utf8' });
+    const restored = await start(restoredDir, 18805);
+    const second = await signIn(restored.base);
+    const recalled = await (await fetch(`${restored.base}/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${second.access_token}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'recall', arguments: { project: 'self host' } } }),
+    })).text();
+    check('a new server restored from that backup serves the memory', restore.status === 0 && /kept across backup and restore/.test(recalled), recalled.slice(0, 300));
+    await stop(restored);
+
     // Not behind a proxy: a caller cannot dodge the lockout by inventing addresses.
     const client = await register(server.base);
     const page = await consent(server.base, client.client_id);
