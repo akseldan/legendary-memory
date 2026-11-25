@@ -1,7 +1,12 @@
 # Execution status — updated 2026-11-19
 
-Tracks the [execution checklist](../../) items against evidence. "Draft PR" means built and
-tested, not merged.
+Tracks the [execution checklist](../../) items against evidence.
+
+**Released 2026-11-25: v1.1.0** (https://github.com/akseldan/legendary-memory/releases/tag/v1.1.0), from
+`main`, with `legendary-memory.mjs`, `legendary-memory.mcpb` and `SHA256SUMS`. The public one-liner
+(`curl -fsSL https://akseldan.github.io/legendary-memory/install.sh | sh`) was verified on a clean Linux
+home: 6 s, 124 MiB, program checksum matches the release, save + search, uninstall keeps memory.
+The personal hub runs v1.1.0 from `main` (schema 5); its memory hashes identically before and after.
 
 **Deployed 2026-11-24 (Daniel ran `deploy-2026-11-19.sh`):** the personal Cloudflare hub runs the
 #9 build (Worker version `b208c58e`), D1 at schema 3 (migrations 0002, 0003 applied in 18 ms).
@@ -30,7 +35,7 @@ deletion records. Contentless FTS5 confirmed working on production D1.
 | P5 Local install lifecycle (macOS arm64, Linux x64/arm64) and self-host backup/restore | **Done** (draft PR #13); Windows not supported by install.sh | `P5-installer-linux-2026-11-25.md` |
 | P6–P13 | Not started | — |
 
-## Draft PR stack (merge in order)
+## PR stack (merged into main 2026-11-25 by fast-forward; #3–#13 closed with a note)
 
 #2 P0 evidence → #3 backup → #4 P1 contract/fixtures → #5 incremental import → #6 search v2 →
 #7 deletion ledger → #8 local guards → #9 portable archive → #10 permissions and connections page → #11 move → #12 limits → #13 installer (supersedes #1).
