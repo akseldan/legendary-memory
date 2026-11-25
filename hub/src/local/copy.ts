@@ -59,7 +59,7 @@ const ROWS_PER_REQUEST = 50;
 const CHARS_PER_REQUEST = 700_000;
 const MESSAGES_PER_REQUEST = 1500;
 
-function httpAllowed(address: URL): boolean {
+export function httpAllowed(address: URL): boolean {
   return address.protocol === 'https:' || (address.protocol === 'http:' && LOCAL_HOSTS.includes(address.hostname));
 }
 
@@ -89,7 +89,7 @@ function askHidden(prompt: string): Promise<string> {
   });
 }
 
-async function keyFor(role: 'from' | 'to', address: URL): Promise<string> {
+export async function keyFor(role: 'from' | 'to', address: URL): Promise<string> {
   const name = `LEGENDARY_MEMORY_${role.toUpperCase()}_KEY`;
   const fromEnv = process.env[name];
   if (fromEnv) return fromEnv;

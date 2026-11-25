@@ -121,6 +121,10 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
     const names = new Map(projects.map((p) => [p.id, p.name]));
     return json({ hits: hits.map((h) => ({ kind: h.kind, title: h.title, snippet: h.snippet, project: (h.project_id && names.get(h.project_id)) || '' })) });
   }
+  if (route === 'POST /ui/brief' || route === 'POST /ui/forget') {
+    const moved = await store.getMoved(db);
+    if (moved) return json({ error: store.movedMessage(moved) }, 409);
+  }
   if (route === 'POST /ui/brief') {
     const body = (await request.json().catch(() => ({}))) as { id?: unknown; brief?: unknown };
     if (typeof body.id !== 'string' || typeof body.brief !== 'string' || body.brief.length > MAX_BRIEF) return json({ error: 'bad request' }, 400);

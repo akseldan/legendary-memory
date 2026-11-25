@@ -96,6 +96,32 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
     });
   }
 
+  // Moving homes (`legendary-memory move`): read or set whether this memory is read-only.
+  if (url.pathname === '/api/state') {
+    if (request.method === 'GET') return json({ moved: await store.getMoved(db), version: VERSION });
+    if (request.method === 'POST') {
+      const body = (await request.json().catch(() => null)) as { moved?: unknown } | null;
+      const moved = body?.moved;
+      if (moved === null) {
+        await store.setMoved(db, null);
+        return json({ moved: null });
+      }
+      if (!moved || typeof moved !== 'object') return problem(400, 'moved must be null or { to, at, memory_sha256 }.');
+      const { to, at, memory_sha256 } = moved as Record<string, unknown>;
+      if (typeof to !== 'string' || !to || to.length > 300 || typeof at !== 'string' || typeof memory_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(memory_sha256)) {
+        return problem(400, 'moved must be null or { to, at, memory_sha256 }.');
+      }
+      await store.setMoved(db, { to, at, memory_sha256 });
+      return json({ moved: await store.getMoved(db) });
+    }
+  }
+
+  // Nothing is written to a memory that has moved; reads and export still work.
+  if (request.method === 'POST' && (url.pathname === '/api/ingest/conversation' || url.pathname === '/api/import')) {
+    const moved = await store.getMoved(db);
+    if (moved) return problem(409, store.movedMessage(moved));
+  }
+
   if (url.pathname === '/api/ingest/conversation' && request.method === 'POST') {
     const declared = Number(request.headers.get('Content-Length') ?? 0);
     if (declared > MAX_BODY_BYTES) return problem(413, 'Body too large. Send long chats in several requests.');

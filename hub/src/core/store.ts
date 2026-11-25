@@ -711,6 +711,41 @@ export async function getMessages(db: Db, conversationId: string, fromSeq: numbe
 // ---------------------------------------------------------------------- forget
 
 
+// ---------------------------------------------------------------------- moved (read-only)
+
+export interface Moved {
+  /** The new home, without any key. */
+  to: string;
+  at: string;
+  /** The memory hash both homes had when the move was verified. */
+  memory_sha256: string;
+}
+
+/** Set when this memory was moved to a new home; it is then read-only. Null on older schemas. */
+export async function getMoved(db: Db): Promise<Moved | null> {
+  try {
+    const row = await db.prepare("SELECT value FROM hub_state WHERE key = 'moved'").first<{ value: string }>();
+    return row ? (JSON.parse(row.value) as Moved) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setMoved(db: Db, moved: Moved | null): Promise<void> {
+  if (!moved) {
+    await db.prepare("DELETE FROM hub_state WHERE key = 'moved'").run();
+    return;
+  }
+  await db
+    .prepare("INSERT INTO hub_state (key, value, updated_at) VALUES ('moved', ?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+    .bind(JSON.stringify(moved), nowIso())
+    .run();
+}
+
+/** The sentence every refused write gives while a memory is read-only after a move. */
+export const movedMessage = (moved: Moved) =>
+  `This memory moved to ${moved.to} on ${moved.at.slice(0, 10)} and is read-only here, so nothing was changed. Reconnect this app to the new address.`;
+
 export type DeletionKind = 'project' | 'checkpoint' | 'artifact' | 'profile' | 'conversation';
 const DELETION_KINDS: readonly DeletionKind[] = ['project', 'checkpoint', 'artifact', 'profile', 'conversation'];
 

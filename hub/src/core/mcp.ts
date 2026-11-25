@@ -107,6 +107,10 @@ export function buildServer(
         return fail('This connection is not allowed to delete, so nothing was deleted. The owner can allow deleting by reconnecting this app.');
       }
       if (write === true && !canWrite) return fail('This connection is read-only, so nothing was saved.');
+      if (write) {
+        const moved = await store.getMoved(db);
+        if (moved) return fail(store.movedMessage(moved));
+      }
       try {
         return await body(args);
       } catch (error) {
