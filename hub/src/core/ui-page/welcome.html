@@ -164,6 +164,19 @@
   .home h1 { text-align: center; }
   .counts { margin-top: 14px; text-align: center; color: var(--soft); font-size: 1.125rem; }
   .block { margin-top: 38px; }
+  .glance { margin: 22px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; padding: 18px 20px; border-radius: 16px; border: 1.5px solid var(--line); background: color-mix(in srgb, var(--card) 88%, transparent); }
+  .glance dt { color: var(--soft); }
+  .glance dd { margin: 0; overflow-wrap: anywhere; }
+  .glance a, .inside a { color: inherit; }
+  .facts li, .log li { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; padding: 10px 16px; border-radius: 14px; border: 1.5px solid var(--line); }
+  .facts .k { font-weight: 650; }
+  .facts .v { flex: 1 1 14rem; white-space: pre-wrap; }
+  .facts input { flex: 1 1 14rem; min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1.5px solid var(--line-strong); background: transparent; color: var(--ink); font: inherit; }
+  .facts input:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
+  .log li { color: var(--soft); font-size: 0.9375rem; }
+  .log time { min-width: 9.5rem; }
+  .log b { color: var(--ink); font-weight: 600; }
+  @media (max-width: 520px) { .glance { grid-template-columns: 1fr; } .glance dt { margin-top: 6px; } }
   .block > h2 { font: 800 1.375rem/1.2 var(--display); letter-spacing: -0.02em; margin-bottom: 12px; }
   .stack { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
   details { border-radius: 16px; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1.5px solid var(--line); backdrop-filter: blur(6px); }
@@ -353,6 +366,7 @@
     <section class="step home" data-step="done" hidden>
       <h1 tabindex="-1">Your memory is live</h1>
       <p class="counts" id="counts"></p>
+      <dl class="glance" id="glance" aria-label="About this memory"></dl>
       <div class="block">
         <h2>Your projects</h2>
         <div class="search">
@@ -361,6 +375,16 @@
         </div>
         <div class="empty" id="empty" hidden>Nothing saved yet. Ask any connected app to save a checkpoint, and the project shows up here.</div>
         <ul class="stack" id="projects"></ul>
+      </div>
+      <div class="block">
+        <h2>Facts about you</h2>
+        <p class="small" id="facts-lede">What assistants have saved about you. Correct anything that is wrong; the new wording replaces the old.</p>
+        <ul class="stack facts" id="facts"></ul>
+      </div>
+      <div class="block">
+        <h2>Activity</h2>
+        <p class="small" id="log-lede"></p>
+        <ul class="stack log" id="log"></ul>
       </div>
       <div class="block">
         <h2>When you're ready</h2>
@@ -414,7 +438,7 @@
       { app: 'Claude Desktop', status: 'found' }, { app: 'Claude Code', status: 'found' }, { app: 'Codex', status: 'found' },
       { app: 'Cursor', status: 'missing' }, { app: 'Gemini CLI', status: 'missing' },
     ],
-    memory: { dataFile: '~/.legendary-memory/memory.db', counts: { projects: 0, sessions: 0, files: 0, facts: 0 }, latest: null, projects: [] },
+    memory: { dataFile: '~/.legendary-memory/memory.db', counts: { projects: 0, sessions: 0, files: 0, facts: 0 }, latest: null, projects: [], facts: [], activity: { days: 90, max: 5000, entries: [] } },
     arrive() {
       const at = new Date().toISOString();
       this.memory.latest = { id: 'demo', title: 'Tested the setup', project: 'Setup Test', source: 'claude', at };
@@ -432,6 +456,8 @@
       if (path === '/ui/apps') return { apps: fake.apps };
       if (path === '/ui/connect') { for (const a of fake.apps) if (body.only.includes(a.app)) a.status = 'connected'; return { apps: fake.apps }; }
       if (path === '/ui/brief') { const p = fake.memory.projects.find((x) => x.id === body.id); if (p) p.brief = body.brief; return { ok: true }; }
+      if (path === '/ui/fact') { const f = (fake.memory.facts || []).find((x) => x.key === body.key); if (f) { f.value = body.value; f.updated_at = new Date().toISOString(); } return { ok: true }; }
+      if (path === '/ui/forget' && body.kind === 'profile') { fake.memory.facts = (fake.memory.facts || []).filter((x) => x.key !== body.id); return { ok: true }; }
       if (path === '/ui/forget') {
         const m = fake.memory;
         m.projects = body.kind === 'project' ? m.projects.filter((p) => p.id !== body.id) : m.projects.map((p) => ({ ...p, sessions: p.sessions.filter((s) => s.id !== body.id) }));
@@ -664,10 +690,86 @@
       $('counts').textContent = [count(c.projects, 'project', 'projects'), count(c.sessions, 'session', 'sessions'), count(c.files, 'saved file', 'saved files'), count(c.facts, 'fact about you', 'facts about you')].join(', ');
       $('where').textContent = `Kept in ${memory.dataFile}`;
       if (memory.undoCommand) $('say-undo').textContent = memory.undoCommand;
+      renderGlance(memory);
+      renderFacts(memory.facts || []);
+      renderLog(memory.activity);
       $('empty').hidden = memory.projects.length > 0;
       const open = new Set([...document.querySelectorAll('#projects details[open]')].map((d) => d.dataset.id));
       $('projects').replaceChildren(...memory.projects.map((p) => projectItem(p, open.has(p.id))));
     } catch (error) { fail(error); }
+  }
+
+  const size = (bytes) => bytes == null ? null : bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  const when = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); };
+  function renderGlance(memory) {
+    const rows = [['Kept in', memory.dataFile]];
+    rows.push(['Last save', memory.latest ? `${when(memory.latest.at)}: "${memory.latest.title}" in ${memory.latest.project}, from ${nice(memory.latest.source)}` : 'Nothing saved yet']);
+    if (memory.backupNote) rows.push(['Backups', memory.backupNote]);
+    const st = memory.storage || {};
+    if (st.usedBytes != null || st.diskFreeBytes != null) {
+      const parts = [];
+      if (st.usedBytes != null) parts.push(st.quotaBytes ? `${size(st.usedBytes)} of ${size(st.quotaBytes)} used (${Math.round((st.usedBytes / st.quotaBytes) * 100)}%)` : `${size(st.usedBytes)} used`);
+      if (st.diskFreeBytes != null) parts.push(`${size(st.diskFreeBytes)} free on this disk`);
+      rows.push(['Storage', parts.join(', ')]);
+    }
+    if (memory.connectionsUrl) rows.push(['Connected apps', el('a', { href: memory.connectionsUrl, textContent: 'See and disconnect apps' })]);
+    else if (apps.length) rows.push(['Connected apps', apps.filter((a) => a.status === 'connected').map((a) => a.app).join(', ') || 'None yet']);
+    $('glance').replaceChildren(...rows.flatMap(([k, v]) => [el('dt', { textContent: k }), el('dd', {}, [v])]));
+  }
+
+  function renderFacts(facts) {
+    $('facts-lede').hidden = false;
+    if (!facts.length) { $('facts').replaceChildren(el('li', { className: 'empty', textContent: 'No facts saved yet.' })); return; }
+    $('facts').replaceChildren(...facts.map((f) => {
+      const row = el('li', {});
+      const show = () => row.replaceChildren(
+        el('span', { className: 'k', textContent: f.key.replace(/-/g, ' ') }),
+        el('span', { className: 'v', textContent: f.value }),
+        el('small', { textContent: `saved ${day(f.updated_at)}` }),
+        el('button', { type: 'button', className: 'quiet', textContent: 'Correct', ariaLabel: `Correct ${f.key.replace(/-/g, ' ')}`, onclick: edit }),
+        el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete', ariaLabel: `Delete ${f.key.replace(/-/g, ' ')}`, onclick: () => askFirst(row, `Delete the fact "${f.key.replace(/-/g, ' ')}"? This cannot be undone.`, { kind: 'profile', id: f.key }) }),
+      );
+      function edit() {
+        const input = el('input', { value: f.value, maxLength: 2000 });
+        input.setAttribute('aria-label', `New wording for ${f.key.replace(/-/g, ' ')}`);
+        const note = el('span', { className: 'danger', role: 'alert' });
+        const save = el('button', { type: 'button', className: 'go', textContent: 'Save', onclick: async () => {
+          if (!input.value.trim()) { note.textContent = 'Type the corrected fact, or delete it instead.'; return; }
+          save.disabled = true;
+          try { await api('/ui/fact', { key: f.key, value: input.value }); await loadMemory(); } catch (error) { note.textContent = `Could not save: ${error.message}`; save.disabled = false; }
+        } });
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); if (e.key === 'Escape') show(); });
+        row.replaceChildren(el('span', { className: 'k', textContent: f.key.replace(/-/g, ' ') }), input, save, el('button', { type: 'button', className: 'quiet', textContent: 'Cancel', onclick: show }), note);
+        input.focus();
+      }
+      show();
+      return row;
+    }));
+  }
+
+  const VERB = { read: 'read', write: 'saved', delete: 'deleted' };
+  function renderLog(activity) {
+    if (!activity) { $('log-lede').textContent = 'Activity history needs the latest version of Legendary Memory.'; $('log').replaceChildren(); return; }
+    $('log-lede').textContent = `Which app read, saved or deleted what. Only you can see this; it names items but never stores their content or your search words. Kept for ${activity.days} days (at most ${activity.max} entries).`;
+    if (!activity.entries.length) { $('log').replaceChildren(el('li', { textContent: 'Nothing yet.' })); return; }
+    $('log').replaceChildren(...activity.entries.map((a) => el('li', {}, [
+      el('time', { dateTime: a.at, textContent: when(a.at) }),
+      el('span', {}, [el('b', { textContent: nice(a.client) }), ` ${a.ok ? VERB[a.action] || a.action : `tried to ${a.action === 'write' ? 'save' : a.action}`} · ${a.tool}${a.target ? ` · ${a.target}` : ''}${a.ok ? '' : ' (refused or failed)'}`]),
+    ])));
+  }
+
+  async function downloadHandoff(p, note) {
+    try {
+      if (demo) throw new Error('not in the preview');
+      const res = await fetch(`/ui/handoff?id=${encodeURIComponent(p.id)}`, { credentials: 'same-origin', headers: host ? (csrf ? { 'X-LM-CSRF': csrf } : {}) : { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) throw new Error('locked');
+      if (!res.ok) throw new Error(`the server answered ${res.status}`);
+      const text = await res.text();
+      const link = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/markdown' })), download: `${p.name.replace(/[^A-Za-z0-9 _-]+/g, '').trim().replace(/\s+/g, '-') || 'project'}-handoff.md` });
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+      try { await navigator.clipboard.writeText(text); note.textContent = 'Downloaded, and copied so you can paste it into any assistant.'; } catch { note.textContent = 'Downloaded.'; }
+    } catch (error) { note.textContent = `Could not make the handoff: ${error.message}`; }
   }
 
   // A delete is never one click: the row swaps itself for a plain question first.
@@ -688,9 +790,12 @@
   function projectItem(p, isOpen) {
     const brief = el('p', { className: 'brief', textContent: p.brief || 'No brief yet. Edit it here, or it is written the next time an assistant saves a checkpoint with one.' });
     const tools = el('div', { className: 'tools' });
+    const handoffNote = el('span', { role: 'status' });
     const showTools = () => tools.replaceChildren(
       el('button', { type: 'button', className: 'quiet', textContent: 'Edit brief', onclick: edit }),
+      el('button', { type: 'button', className: 'quiet', textContent: 'Handoff (Markdown)', onclick: () => downloadHandoff(p, handoffNote) }),
       el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete project', onclick: () => askFirst(tools, `Delete ${p.name} and all its sessions and files? This cannot be undone.`, { kind: 'project', id: p.id }) }),
+      handoffNote,
     );
     function edit() {
       const area = el('textarea', { value: p.brief, maxLength: 16000 });
