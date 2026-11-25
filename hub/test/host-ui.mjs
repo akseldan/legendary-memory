@@ -127,7 +127,7 @@ try {
   check('a session can be deleted', (await ask('/ui/forget', { method: 'POST', cookie, csrf, body: { kind: 'checkpoint', id: pumps.id } })).status === 200);
   const other = memory.data.projects.find((p) => p.name === 'Second Project');
   check('a project can be deleted', (await ask('/ui/forget', { method: 'POST', cookie, csrf, body: { kind: 'project', id: other.id } })).status === 200);
-  check('only projects and sessions can be deleted here', (await ask('/ui/forget', { method: 'POST', cookie, csrf, body: { kind: 'profile', id: 'x' } })).status === 400);
+  check('only projects, sessions and facts can be deleted here', (await ask('/ui/forget', { method: 'POST', cookie, csrf, body: { kind: 'artifact', id: 'x' } })).status === 400);
   const after = (await ask('/ui/memory', { cookie })).data;
   check('the deletions took effect', after.counts.projects === 1 && after.counts.sessions === 1, JSON.stringify(after.counts));
 

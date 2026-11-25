@@ -5,6 +5,8 @@
   "compatibility_date": "2026-10-01",
   // Needed so the sign-in library can safely fetch an AI app's public metadata document.
   "compatibility_flags": ["global_fetch_strictly_public"],
+  // The memory page is bundled as text.
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
 
   // Wrangler creates both of these in your Cloudflare account on the first deploy.
   "d1_databases": [

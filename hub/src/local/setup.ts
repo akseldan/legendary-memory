@@ -6,6 +6,8 @@
  * own "legendary-memory" entry, leaves a file alone if it cannot parse it, and saves a copy
  * of any file before changing it.
  */
+import type { SetupResult } from '../core/ui';
+export type { SetupResult };
 import { spawnSync } from 'node:child_process';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, isAbsolute, join } from 'node:path';
@@ -30,13 +32,6 @@ export interface SetupContext {
   run: (command: string, args: string[]) => { code: number | null; output: string };
 }
 
-export interface SetupResult {
-  app: string;
-  status: 'connected' | 'already' | 'removed' | 'not-installed' | 'skipped' | 'failed';
-  detail: string;
-  /** Something the user should know about this app, shown next to it on the welcome page. */
-  note?: string;
-}
 
 interface JsonApp {
   app: string;

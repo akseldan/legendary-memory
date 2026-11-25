@@ -13,7 +13,7 @@ import { Readable } from 'node:stream';
 import worker from 'hub-worker';
 import type { Db } from '../core/db';
 import type { SqliteKv } from './kv';
-import { hostUi } from './ui-session';
+import { hostUi } from '../core/ui-session';
 
 export interface HostOptions {
   port: number;

@@ -10,7 +10,7 @@ import { handleApi } from '../core/api';
 import { SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE } from '../core/constants';
 import type { Db } from '../core/db';
 import { handleMcpRequest } from '../core/mcp';
-import { type UiOptions, handleUi } from './ui';
+import { type UiOptions, handleUi } from '../core/ui';
 
 const MAX_BODY = 2_000_000;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);

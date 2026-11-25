@@ -14,7 +14,7 @@ app's docs say yes, untested here) · **Unavailable** (the app or plan cannot co
 |---|---|---|---|---|---|
 | Claude web (claude.ai) | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Custom connector with the hub's `/mcp` address. Test code CT-CLW-7341. |
 | Claude Desktop (Mac) | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Same account connector as the web. CT-CLD-2958. |
-| Claude iPhone | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Uses the connector added on web/desktop. CT-CLI-8170 (the app saved the title with angle brackets; stored exactly as sent). |
+| Claude iPhone | Paid (owner) | **Verified** 2026-11-25 | yes | yes | Uses the connector added on web/desktop. CT-CLI-8170, run with the Mac asleep (the app saved the title with angle brackets; stored exactly as sent). |
 | ChatGPT web (developer mode) | Plus (owner) | **Verified** 2026-11-25 | yes | yes | Saving works on Plus, even though some OpenAI docs say write actions need Business/Enterprise. CT-GPW-6612. |
 | ChatGPT iPhone | Plus (owner) | **Verified** 2026-11-25 | yes | yes | Uses the app enabled on the web. CT-GPI-5523. |
 | Codex | Plus (owner) | **Verified** 2026-11-25 | yes | yes | Streamable HTTP server + `codex mcp login <name>`; recorded as source `codex`. CT-CDX-4087. |

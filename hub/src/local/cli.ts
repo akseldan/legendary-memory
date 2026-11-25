@@ -18,7 +18,7 @@
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -26,10 +26,10 @@ import { SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION } from '../core/constant
 import { buildServer } from '../core/mcp';
 import { MIN_PASSPHRASE_LENGTH, apiKey, dataDir, dbPath, passphrase, signInDbPath } from './config';
 import { startServer } from './server';
-import { bearerAuthorizer } from './ui';
+import { bearerAuthorizer } from '../core/ui';
 import { defaultRunner, formatResults, installBundle, runSetup, stableNodePath } from './setup';
 import { loadSqlite, openDatabase } from './sqlite';
-import welcomeHtml from './ui/welcome.html';
+import welcomeHtml from '../core/ui-page/welcome.html';
 
 // Node 22 labels its built-in SQLite "experimental" on every start. Apps show a server's
 // stderr as errors, so drop that one notice and let every other warning through.
@@ -99,6 +99,24 @@ function openInBrowser(address: string): void {
   }
 }
 
+/** The newest file in this computer's backups folder, for the memory page. */
+function newestBackupNote(): string {
+  const dir = join(dataDir(), 'backups');
+  let newest: { name: string; at: number } | null = null;
+  try {
+    for (const name of readdirSync(dir)) {
+      if (!/\.(db|lmarchive)$/.test(name)) continue;
+      const at = statSync(join(dir, name)).mtimeMs;
+      if (!newest || at > newest.at) newest = { name, at };
+    }
+  } catch {
+    // No backups folder yet.
+  }
+  return newest
+    ? `Newest backup: ${newest.name}, ${new Date(newest.at).toLocaleString()} (in ${dir}).`
+    : `No backup yet. Make one with: legendary-memory backup`;
+}
+
 async function main(): Promise<void> {
   (await import('./limits')).configureLocalLimits();
   switch (command) {
@@ -110,6 +128,7 @@ async function main(): Promise<void> {
         authorize: bearerAuthorizer(token),
         html: welcomeHtml,
         dataFile: dbPath(),
+        backupNote: newestBackupNote,
         undoCommand: undoCommand(),
         setup: (run: { dryRun: boolean; undo: boolean; only?: string[] }) =>
           runSetup({

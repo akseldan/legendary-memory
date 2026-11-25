@@ -4,6 +4,7 @@
  *
  *   /mcp         the tools AI apps call (needs a token from the sign-in below)
  *   /authorize   the sign-in page where you approve an app
+ *   /            the owner's memory page (passphrase), with /ui/* behind it
  *   /connections the owner's list of connected apps, with last use and disconnect
  *   /oauth/*     token and registration endpoints, handled by the OAuth library
  *   /api/*       importer and browser-extension API (needs BRIDGE_API_KEY)
@@ -13,6 +14,8 @@ import { handleApi } from '../core/api';
 import type { Db } from '../core/db';
 import { handleMcpRequest } from '../core/mcp';
 import { currentLimits, setLimits } from '../core/limits';
+import welcomeHtml from '../core/ui-page/welcome.html';
+import { hostUi } from '../core/ui-session';
 import { handleAuthorize } from './auth';
 import { grantIdOf, handleConnections, recordUse } from './connections';
 import { type ConnectionProps, type Env, SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION } from './env';
@@ -35,12 +38,29 @@ const mcpHandler = {
 
 const DAY = 24 * 60 * 60;
 
+const BACKUP_NOTE =
+  'Cloudflare keeps a restorable history of this hub (D1 Time Travel: 7 days on the free plan, 30 on a paid one). For a copy you hold yourself, run "legendary-memory backup --from" with this address on your computer; it asks for the importer key.';
+
 const defaultHandler = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname === '/authorize') return handleAuthorize(request, env);
     if (pathname === '/connections') return handleConnections(request, env, dbOf(env));
     if (pathname.startsWith('/api/')) return handleApi(request, { db: dbOf(env), apiKey: env.BRIDGE_API_KEY });
+    // The memory page needs the owner's passphrase; without one set, only the plain notice below is served.
+    if (env.OWNER_PASSPHRASE && (pathname === '/' || pathname.startsWith('/ui/'))) {
+      const answer = await hostUi({
+        db: dbOf(env),
+        kv: env.OAUTH_KV,
+        passphrase: env.OWNER_PASSPHRASE,
+        origin: publicOrigin(request, env),
+        html: welcomeHtml,
+        dataFile: `your Cloudflare hub (${publicOrigin(request, env)})`,
+        backupNote: BACKUP_NOTE,
+        connectionsUrl: '/connections',
+      })(request);
+      if (answer) return answer;
+    }
     if (pathname === '/') {
       return new Response(`Legendary Memory hub v${VERSION}. Add this address plus /mcp as a connector in your AI app.\n`, {
         headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Robots-Tag': 'noindex' },

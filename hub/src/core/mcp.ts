@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { type ConnectionProps, SCOPE_WRITE, VERSION, canDelete } from './constants';
 import type { Db } from './db';
 import * as store from './store';
+import { logActivity } from './activity';
 import { admitWrite } from './limits';
 import { clamp, day, slugify } from './text';
 
@@ -100,10 +101,19 @@ export function buildServer(
     }),
   );
 
-  /** Runs a tool body; unexpected failures become a plain error instead of leaking internals. */
-  const guarded =
-    <Args>(name: string, write: boolean | 'delete', body: (args: Args) => Promise<ToolResult>) =>
-    async (args: Args): Promise<ToolResult> => {
+  /** What a call names, for the activity history: a project, an item or a fact's key. Never search words or content. */
+  const targetOf = (name: string, args: unknown): string | null => {
+    const a = (args ?? {}) as Record<string, unknown>;
+    if (name === 'search') return typeof a.project === 'string' ? a.project : null;
+    if (name === 'remember') return typeof a.key === 'string' ? `fact:${a.key}` : null;
+    if (typeof a.ref === 'string') return a.ref;
+    if (typeof a.project === 'string') return a.project;
+    return null;
+  };
+
+  /** Runs a tool body and notes it in the activity history; unexpected failures become a plain error. */
+  const guarded = <Args>(name: string, write: boolean | 'delete', body: (args: Args) => Promise<ToolResult>) => {
+    const run = async (args: Args): Promise<ToolResult> => {
       if (write === 'delete' && !mayDelete) {
         return fail('This connection is not allowed to delete, so nothing was deleted. The owner can allow deleting by reconnecting this app.');
       }
@@ -130,6 +140,18 @@ export function buildServer(
         return fail(`Legendary Memory could not complete ${name}. Nothing was changed. Try again.`);
       }
     };
+    return async (args: Args): Promise<ToolResult> => {
+      const result = await run(args);
+      await logActivity(db, {
+        client: source(),
+        action: write === 'delete' ? 'delete' : write ? 'write' : 'read',
+        tool: name,
+        target: targetOf(name, args),
+        ok: !result.isError,
+      });
+      return result;
+    };
+  };
 
   /** Picks the project a write should go to, creating it only when nothing similar exists. */
   async function projectForWrite(ref: string, forceNew: boolean | undefined) {

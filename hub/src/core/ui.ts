@@ -2,21 +2,34 @@
  * The welcome page and "your memory" view that `legendary-memory start` opens in the
  * browser, plus the few local-only endpoints that page calls.
  *
+ * Runs unchanged on the Cloudflare hub (no Node-only imports here).
+ *
  * The page itself holds no data and is served to anyone on this computer. Everything under
  * /ui/ needs the one-time key that `start` puts in the address it opens, so another program
  * or web page that merely knows the port cannot read your memory or change app settings.
  */
-import { timingSafeEqual } from 'node:crypto';
-import type { Db } from '../core/db';
-import * as store from '../core/store';
-import { admitWrite } from '../core/limits';
-import type { SetupResult } from './setup';
+import type { Db } from './db';
+import * as store from './store';
+import { ACTIVITY_DAYS, ACTIVITY_MAX, logActivity, recentActivity } from './activity';
+import { projectHandoff } from './handoff';
+import { admitWrite, currentLimits } from './limits';
+/** What looking at, connecting or disconnecting one app reports (the local target's setup). */
+export interface SetupResult {
+  app: string;
+  status: 'connected' | 'already' | 'removed' | 'not-installed' | 'skipped' | 'failed';
+  detail: string;
+  note?: string;
+}
 
 export interface UiOptions {
   /** Decides whether a /ui/ request may go on: null means yes, otherwise the answer to send back. */
   authorize: (request: Request) => Response | null | Promise<Response | null>;
   html: string;
   dataFile: string;
+  /** Where backups of this memory come from, in a sentence; a function is asked on each visit. */
+  backupNote?: string | (() => string | undefined);
+  /** Where the owner sees and disconnects the apps connected to a hub. */
+  connectionsUrl?: string;
   /** The command that disconnects every app, as this copy was installed. Shown on the page. */
   undoCommand?: string;
   /** Looks at, connects or disconnects the AI apps on this computer. Absent on a hosted server, where those routes do not exist. */
@@ -41,11 +54,17 @@ const PAGE_HEADERS = {
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 
+/** Compares without stopping at the first difference, so timing does not reveal how much matched. */
+function sameText(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 function keyOk(request: Request, token: string): boolean {
   const header = request.headers.get('authorization') ?? '';
-  const given = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '');
-  const expected = Buffer.from(token);
-  return given.length === expected.length && timingSafeEqual(given, expected);
+  return sameText(header.startsWith('Bearer ') ? header.slice(7) : '', token);
 }
 
 /** The key `start` creates fresh each time and puts in the address it opens. */
@@ -69,7 +88,8 @@ function appStates(results: SetupResult[]): AppState[] {
 const total = async (db: Db, table: string): Promise<number> =>
   (await db.prepare(`SELECT count(*) AS n FROM ${table}`).first<{ n: number }>())?.n ?? 0;
 
-async function memorySummary(db: Db, dataFile: string, undoCommand?: string) {
+async function memorySummary(db: Db, ui: UiOptions) {
+  const { dataFile, undoCommand } = ui;
   const projects = await store.listProjects(db);
   const [sessions, files, facts, [latest]] = await Promise.all([
     total(db, 'checkpoints'),
@@ -78,8 +98,22 @@ async function memorySummary(db: Db, dataFile: string, undoCommand?: string) {
     store.recentCheckpoints(db, null, 1),
   ]);
   const names = new Map(projects.map((p) => [p.id, p.name]));
+  const limits = currentLimits();
+  const [used, activity, profile] = await Promise.all([
+    limits.size ? limits.size().catch(() => null) : Promise.resolve(null),
+    recentActivity(db, 40),
+    store.getProfile(db),
+  ]);
   return {
     dataFile,
+    ...(() => {
+      const note = typeof ui.backupNote === 'function' ? ui.backupNote() : ui.backupNote;
+      return note ? { backupNote: note } : {};
+    })(),
+    ...(ui.connectionsUrl ? { connectionsUrl: ui.connectionsUrl } : {}),
+    storage: { usedBytes: used, quotaBytes: limits.quotaBytes ?? null, diskFreeBytes: limits.diskFree?.() ?? null },
+    activity: { days: ACTIVITY_DAYS, max: ACTIVITY_MAX, entries: activity },
+    facts: profile,
     ...(undoCommand ? { undoCommand } : {}),
     counts: { projects: projects.length, sessions, files, facts },
     latest: latest
@@ -119,17 +153,26 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
   const setup = ui.setup;
   if (!setup && /^(GET \/ui\/apps|POST \/ui\/(connect|disconnect))$/.test(route)) return json({ error: 'not found' }, 404);
   if (setup && route === 'GET /ui/apps') return json({ apps: appStates(setup({ dryRun: true, undo: false })) });
-  if (route === 'GET /ui/memory') return json(await memorySummary(db, ui.dataFile, ui.undoCommand));
+  if (route === 'GET /ui/memory') return json(await memorySummary(db, ui));
   if (route === 'GET /ui/search') {
     const [hits, projects] = await Promise.all([store.search(db, url.searchParams.get('q') ?? '', { limit: 10 }), store.listProjects(db)]);
     const names = new Map(projects.map((p) => [p.id, p.name]));
     return json({ hits: hits.map((h) => ({ kind: h.kind, title: h.title, snippet: h.snippet, project: (h.project_id && names.get(h.project_id)) || '' })) });
   }
-  if (route === 'POST /ui/brief' || route === 'POST /ui/forget') {
+  if (route === 'GET /ui/handoff') {
+    const handoff = await projectHandoff(db, url.searchParams.get('id') ?? '');
+    if (!handoff) return json({ error: 'not found' }, 404);
+    await logActivity(db, { client: 'memory page', action: 'read', tool: 'handoff', target: handoff.name, ok: true });
+    const file = `${handoff.name.replace(/[^A-Za-z0-9 _-]+/g, '').trim().replace(/\s+/g, '-') || 'project'}-handoff.md`;
+    return new Response(handoff.markdown, {
+      headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': `attachment; filename="${file}"`, 'Cache-Control': 'no-store' },
+    });
+  }
+  if (route === 'POST /ui/brief' || route === 'POST /ui/forget' || route === 'POST /ui/fact') {
     const moved = await store.getMoved(db);
     if (moved) return json({ error: store.movedMessage(moved) }, 409);
   }
-  if (route === 'POST /ui/brief') {
+  if (route === 'POST /ui/brief' || route === 'POST /ui/fact') {
     const admission = await admitWrite(Number(request.headers.get('Content-Length') ?? 0) || 0);
     if (!admission.ok) return json({ error: admission.message }, 507);
   }
@@ -139,13 +182,26 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
     const project = await store.getProject(db, body.id);
     if (!project) return json({ error: 'not found' }, 404);
     await store.updateProject(db, project, { brief: body.brief });
+    await logActivity(db, { client: 'memory page', action: 'write', tool: 'edit brief', target: project.name, ok: true });
     return json({ ok: true });
+  }
+  if (route === 'POST /ui/fact') {
+    // Correcting a fact: the new wording replaces the old one under the same key.
+    const body = (await request.json().catch(() => ({}))) as { key?: unknown; value?: unknown };
+    if (typeof body.key !== 'string' || !body.key.trim() || body.key.length > 60 || typeof body.value !== 'string' || !body.value.trim() || body.value.length > 2000) {
+      return json({ error: 'bad request' }, 400);
+    }
+    const saved = await store.setProfile(db, body.key, body.value);
+    await logActivity(db, { client: 'memory page', action: 'write', tool: 'correct fact', target: `fact:${saved.key}`, ok: true });
+    return json({ ok: true, key: saved.key, redactions: saved.redactions });
   }
   if (route === 'POST /ui/forget') {
     const body = (await request.json().catch(() => ({}))) as { kind?: unknown; id?: unknown };
-    // The page lists only projects and sessions, so it may delete only those.
-    if ((body.kind !== 'project' && body.kind !== 'checkpoint') || typeof body.id !== 'string') return json({ error: 'bad request' }, 400);
-    return (await store.forget(db, body.kind, body.id)) ? json({ ok: true }) : json({ error: 'not found' }, 404);
+    // The page lists projects, sessions and facts, so it may delete only those.
+    if ((body.kind !== 'project' && body.kind !== 'checkpoint' && body.kind !== 'profile') || typeof body.id !== 'string') return json({ error: 'bad request' }, 400);
+    const done = await store.forget(db, body.kind, body.id);
+    await logActivity(db, { client: 'memory page', action: 'delete', tool: `delete ${body.kind === 'profile' ? 'fact' : body.kind === 'checkpoint' ? 'session' : 'project'}`, target: body.kind === 'profile' ? `fact:${body.id}` : body.id, ok: done });
+    return done ? json({ ok: true }) : json({ error: 'not found' }, 404);
   }
   if (setup && (route === 'POST /ui/connect' || route === 'POST /ui/disconnect')) {
     const body = (await request.json().catch(() => ({}))) as { only?: unknown };

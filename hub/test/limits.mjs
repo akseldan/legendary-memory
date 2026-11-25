@@ -40,11 +40,12 @@ async function start(port, extra) {
     const parsed = JSON.parse(await res.text());
     return { text: parsed.result?.content?.map((c) => c.text).join('\n') ?? JSON.stringify(parsed), isError: Boolean(parsed.result?.isError) };
   };
+  // As big as the save that was just refused, so the answer does not depend on how much room the last save left.
   const ingest = () =>
     fetch(`${base}/api/ingest/conversation`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'claude', external_id: `c${Date.now()}`, title: 'x', url: '', messages: [{ seq: 0, role: 'user', text: 'hello' }] }),
+      body: JSON.stringify({ source: 'claude', external_id: `c${Date.now()}`, title: 'x', url: '', messages: [{ seq: 0, role: 'user', text: filler(6000, 'chat') }] }),
     });
   return { child, dir, tool, ingest };
 }
@@ -71,7 +72,7 @@ try {
     check('and the reply says what still works and how to make room', full && /Reading, searching, exporting and deleting still work/.test(full.text) && /delete or archive/.test(full.text));
     check('recall still works', /Big Project/.test((await q.tool('recall', { project: 'big project' })).text));
     check('search still works', !(await q.tool('search', { query: 'notes' })).isError);
-    check('the importer API answers 507 with the reason', (await q.ingest()).status === 507);
+    { const r = await q.ingest(); check('the importer API answers 507 with the reason', r.status === 507, `${r.status} ${await r.text()}`); }
     const exp = spawnSync('node', [BIN, 'export', '--from', join(q.dir, 'memory.db'), '--to', join(root, 'full.lmarchive')], { encoding: 'utf8', env: envFor(join(root, 'cli'), {}) });
     check('export still works', exp.status === 0 && existsSync(join(root, 'full.lmarchive')), exp.stderr);
     let freed = true;

@@ -21,6 +21,8 @@ Every rule names the test that proves it. "Hub" means any home: local file, self
 | Conversation | `(source, external_id)`; local `id` UUID | Upsert; `source` ∈ chatgpt, claude, gemini, other | Add `codex` and `cursor` to `source` (found by the P1 fixtures: Codex history must be filed as `other` today) |
 | Message | `(conversation, seq)` | Upsert: re-sending rewrites text **and re-indexes every message** in the batch | Hash `(role, text)`; skip unchanged rows and their index rows (§3, P2.2) |
 
+| Activity entry (schema 6) | Local autoincrement `id` | Added in P8: one row per tool call or memory-page action: time, app, read/write/delete, tool, a reference (project name, item ref or `fact:<key>`), success | Operational, not memory: never exported, copied, backed up or hashed. No content and no search words. 90 days, newest 5,000 |
+
 Rules:
 1. Ids are generated once, by the home that first stores the record, and never change. `copy`, `backup` and restore keep them.
 2. Autoincrement ids (`brief_versions.id`, `messages.id`, `search_map.id`) are local and must never appear in a ref, export key or manifest. Proven by `hub/scripts/manifest.py` and `backup.ts`, which hash without them.
@@ -66,7 +68,7 @@ Judged cases live in `bench/fixtures.mjs` (`project-name` kind).
 
 | Action | Meaning | Current | Target |
 |---|---|---|---|
-| Correct | A fact or decision changed | Write a new checkpoint or edit the brief | Same; recall prefers the newest; the old one stays visible as history |
+| Correct | A fact or decision changed | Write a new checkpoint or edit the brief. A profile fact is corrected in place on the memory page (P8): the new wording replaces the old, and the activity history records that it was corrected (not the old wording) | Same; recall prefers the newest; the old one stays visible as history. Open: keep earlier wordings of a fact, like `brief_versions` |
 | Archive | Keep, but stop surfacing by default | `projects.status = archived` | Same; archived projects stay searchable when asked |
 | Delete (`forget`) | Remove one item now | Hard delete of the row and its index rows. Project delete cascades to its briefs, checkpoints and artifacts; its chats stay, unfiled | Same, **plus** a deletion record (§6) |
 | Erase account | Remove everything a hosted account holds | Not built | P7/P9: live data now; provider backups by their published window |
