@@ -1,7 +1,15 @@
 # Execution status — updated 2026-11-19
 
 Tracks the [execution checklist](../../) items against evidence. "Draft PR" means built and
-tested, not merged or deployed. Nothing below has been deployed to the Cloudflare hub.
+tested, not merged.
+
+**Deployed 2026-11-24 (Daniel ran `deploy-2026-11-19.sh`):** the personal Cloudflare hub runs the
+#9 build (Worker version `b208c58e`), D1 at schema 3 (migrations 0002, 0003 applied in 18 ms).
+Rollback point: D1 Time Travel bookmark `00000057-00000000-0000512e-60dceb3ff45f887a65a08a7034d65621`.
+Verified: every checkpoint, artifact, project and brief revision from the pre-deploy backup is present
+unchanged (33 → 37 checkpoints: 4 new since); recall, fuzzy recall and search via the Claude connector
+work, including text past character 8,000; backups and `copy` from the hub work; the hub now carries
+deletion records. Contentless FTS5 confirmed working on production D1.
 
 | Item | Status | Evidence |
 |---|---|---|
@@ -25,7 +33,7 @@ tested, not merged or deployed. Nothing below has been deployed to the Cloudflar
 #2 P0 evidence → #3 backup → #4 P1 contract/fixtures → #5 incremental import → #6 search v2 →
 #7 deletion ledger → #8 local guards → #9 portable archive.
 
-## Deploying to the personal Cloudflare hub (needs Daniel's go-ahead)
+## Deploying to the personal Cloudflare hub (done 2026-11-24; kept for the next deploy)
 
 Schema goes 1 → 3. Steps: fresh `legendary-memory backup` of the hub; `wrangler d1 migrations apply
 DB --remote`; `wrangler deploy` of the same build; recall/search from Claude and ChatGPT; second
