@@ -1,0 +1,43 @@
+name: release
+# Push a tag like v1.1.0 (matching hub/package.json) to publish a release with the files the
+# one-command installer and the Claude Desktop button download:
+#   legendary-memory.mjs   the whole program in one file (run by the installer's private Node.js)
+#   legendary-memory.mcpb  the Claude Desktop extension
+#   SHA256SUMS             checksums the installer verifies before using a download
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: hub/package-lock.json
+      - name: Tag matches the version
+        run: test "${GITHUB_REF_NAME}" = "v$(node -p "require('./package.json').version")"
+      - run: npm ci
+      - run: npm run test:all
+      - run: npm run pack:mcpb
+      - name: Checksums
+        working-directory: hub/dist
+        run: sha256sum legendary-memory.mjs legendary-memory.mcpb > SHA256SUMS && cat SHA256SUMS
+      - name: Publish
+        working-directory: hub/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Keep notes written by hand if the release already exists; otherwise use the tag's message.
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-from-tag
+          gh release upload "$GITHUB_REF_NAME" legendary-memory.mjs legendary-memory.mcpb SHA256SUMS --clobber

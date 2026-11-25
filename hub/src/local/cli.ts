@@ -18,7 +18,9 @@
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION } from '../core/constants';
 import { buildServer } from '../core/mcp';
@@ -69,6 +71,23 @@ const USAGE = `Legendary Memory ${VERSION}: one memory shared across your AI ass
                                        Serve phone and web apps from your own machine
   legendary-memory stdio               Used by the AI apps; you do not run this yourself`;
 
+/** A path as someone would type it: ~ for the home folder, quoted if it has spaces. */
+function typed(path: string): string {
+  const home = homedir();
+  const short = path.startsWith(`${home}/`) ? `~/${path.slice(home.length + 1)}` : path;
+  return /\s/.test(short) ? `"${path}"` : short;
+}
+
+/**
+ * The command that disconnects every app. The one-command installer leaves a
+ * `legendary-memory` command next to the program; otherwise it is Node.js plus the program.
+ */
+function undoCommand(): string {
+  const launcher = join(dataDir(), 'bin', 'legendary-memory');
+  if (existsSync(launcher)) return `${typed(launcher)} setup --undo`;
+  return `${typed(stableNodePath(process.execPath))} ${typed(join(dataDir(), 'bin', 'legendary-memory.mjs'))} setup --undo`;
+}
+
 /** Opens the address in the default browser. Best effort: the address is also printed. */
 function openInBrowser(address: string): void {
   const [program, args] =
@@ -91,6 +110,7 @@ async function main(): Promise<void> {
         authorize: bearerAuthorizer(token),
         html: welcomeHtml,
         dataFile: dbPath(),
+        undoCommand: undoCommand(),
         setup: (run: { dryRun: boolean; undo: boolean; only?: string[] }) =>
           runSetup({
             home: homedir(),

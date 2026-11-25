@@ -17,6 +17,8 @@ export interface UiOptions {
   authorize: (request: Request) => Response | null | Promise<Response | null>;
   html: string;
   dataFile: string;
+  /** The command that disconnects every app, as this copy was installed. Shown on the page. */
+  undoCommand?: string;
   /** Looks at, connects or disconnects the AI apps on this computer. Absent on a hosted server, where those routes do not exist. */
   setup?: (run: { dryRun: boolean; undo: boolean; only?: string[] }) => SetupResult[];
 }
@@ -67,7 +69,7 @@ function appStates(results: SetupResult[]): AppState[] {
 const total = async (db: Db, table: string): Promise<number> =>
   (await db.prepare(`SELECT count(*) AS n FROM ${table}`).first<{ n: number }>())?.n ?? 0;
 
-async function memorySummary(db: Db, dataFile: string) {
+async function memorySummary(db: Db, dataFile: string, undoCommand?: string) {
   const projects = await store.listProjects(db);
   const [sessions, files, facts, [latest]] = await Promise.all([
     total(db, 'checkpoints'),
@@ -78,6 +80,7 @@ async function memorySummary(db: Db, dataFile: string) {
   const names = new Map(projects.map((p) => [p.id, p.name]));
   return {
     dataFile,
+    ...(undoCommand ? { undoCommand } : {}),
     counts: { projects: projects.length, sessions, files, facts },
     latest: latest
       ? { id: latest.id, title: latest.title, project: names.get(latest.project_id) ?? '', source: latest.source, at: latest.created_at }
@@ -116,7 +119,7 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
   const setup = ui.setup;
   if (!setup && /^(GET \/ui\/apps|POST \/ui\/(connect|disconnect))$/.test(route)) return json({ error: 'not found' }, 404);
   if (setup && route === 'GET /ui/apps') return json({ apps: appStates(setup({ dryRun: true, undo: false })) });
-  if (route === 'GET /ui/memory') return json(await memorySummary(db, ui.dataFile));
+  if (route === 'GET /ui/memory') return json(await memorySummary(db, ui.dataFile, ui.undoCommand));
   if (route === 'GET /ui/search') {
     const [hits, projects] = await Promise.all([store.search(db, url.searchParams.get('q') ?? '', { limit: 10 }), store.listProjects(db)]);
     const names = new Map(projects.map((p) => [p.id, p.name]));

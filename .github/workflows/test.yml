@@ -26,4 +26,7 @@ jobs:
           cache: npm
           cache-dependency-path: hub/package-lock.json
       - run: npm ci
+      - name: Lint the installer
+        if: runner.os == 'Linux'
+        run: shellcheck -s sh ../site/install.sh
       - run: npm run test:all

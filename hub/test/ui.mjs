@@ -84,6 +84,11 @@ try {
   console.log('\nMemory');
   const empty = await (await ui('/ui/memory')).json();
   check('an empty memory reports nothing', empty.latest === null && empty.counts.projects === 0 && empty.projects.length === 0, JSON.stringify(empty));
+  check(
+    'the undo command names the Node.js and program that are actually installed',
+    /\/node ~\/\.legendary-memory\/bin\/legendary-memory\.mjs setup --undo$/.test(empty.undoCommand ?? ''),
+    empty.undoCommand,
+  );
   await mcp('save_checkpoint', { project: 'Cooling System', title: 'Chose the fan curve', summary: 'Thermistor-driven curve.', brief: 'Goal: quiet cooling.' });
   const full = await (await ui('/ui/memory')).json();
   check('a saved checkpoint shows up as the latest', full.latest?.title === 'Chose the fan curve' && full.latest?.project === 'Cooling System' && full.latest?.source === 'claude', JSON.stringify(full.latest));

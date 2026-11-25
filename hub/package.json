@@ -1,6 +1,6 @@
 {
   "name": "legendary-memory",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "private": true,
   "description": "One memory shared across your AI assistants (Claude, ChatGPT, Cursor and other MCP apps). Runs on your own computer with no account, on your own server, or on Cloudflare.",
   "license": "MIT",
@@ -19,7 +19,7 @@
     "test:host": "npm run build:local && node test/host.mjs",
     "test:setup": "npm run build:local && node test/setup.mjs",
     "pack:mcpb": "npm run build:local && node ../packaging/mcpb/pack.mjs",
-    "test:all": "npm run typecheck && vitest run && npm run build:local && node test/local.mjs && node test/host.mjs && node test/setup.mjs && node test/ui.mjs && node test/copy.mjs && node test/host-ui.mjs && node test/db.mjs && node test/backup.mjs && node test/ingest.mjs && node test/search-v2.mjs && node test/deletions.mjs && node test/local-guards.mjs && node test/archive.mjs && node test/connections.mjs && node test/move.mjs && node test/limits.mjs",
+    "test:all": "npm run typecheck && vitest run && npm run build:local && node test/local.mjs && node test/host.mjs && node test/setup.mjs && node test/ui.mjs && node test/copy.mjs && node test/host-ui.mjs && node test/db.mjs && node test/backup.mjs && node test/ingest.mjs && node test/search-v2.mjs && node test/deletions.mjs && node test/local-guards.mjs && node test/archive.mjs && node test/connections.mjs && node test/move.mjs && node test/limits.mjs && node test/install.mjs",
     "prepublishOnly": "npm run test:all",
     "start": "npm run build:local && node dist/legendary-memory.mjs start",
     "test:ui": "npm run build:local && node test/ui.mjs",
@@ -28,7 +28,14 @@
     "test:db": "npm run build:local && node test/db.mjs",
     "test:backup": "npm run build:local && node test/backup.mjs",
     "test:ingest": "npm run build:local && node test/ingest.mjs",
-    "test:search": "npm run build:local && node test/search-v2.mjs && node test/deletions.mjs && node test/local-guards.mjs && node test/archive.mjs && node test/connections.mjs && node test/move.mjs && node test/limits.mjs"
+    "test:search": "npm run build:local && node test/search-v2.mjs",
+    "test:deletions": "npm run build:local && node test/deletions.mjs",
+    "test:guards": "npm run build:local && node test/local-guards.mjs",
+    "test:archive": "npm run build:local && node test/archive.mjs",
+    "test:connections": "npm run build:local && node test/connections.mjs",
+    "test:move": "npm run build:local && node test/move.mjs",
+    "test:limits": "npm run build:local && node test/limits.mjs",
+    "test:install": "npm run build:local && node test/install.mjs"
   },
   "devDependencies": {
     "@cfworker/json-schema": "^4.1.6",
