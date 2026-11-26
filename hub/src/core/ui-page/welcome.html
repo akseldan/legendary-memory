@@ -725,6 +725,8 @@
       if (st.diskFreeBytes != null) parts.push(`${size(st.diskFreeBytes)} free on this disk`);
       rows.push(['Storage', parts.join(', ')]);
     }
+    const h = memory.health;
+    if (h) rows.push(['Last 24 hours', `${h.reads} reads, ${h.writes} saves, ${h.deletes} deletes${h.refused ? `, ${h.refused} refused or failed (see Activity)` : ', nothing refused'}`]);
     if (memory.connectionsUrl) rows.push(['Connected apps', el('a', { href: memory.connectionsUrl, textContent: 'See and disconnect apps' })]);
     else if (apps.length) rows.push(['Connected apps', apps.filter((a) => a.status === 'connected').map((a) => a.app).join(', ') || 'None yet']);
     $('glance').replaceChildren(...rows.flatMap(([k, v]) => [el('dt', { textContent: k }), el('dd', {}, [v])]));

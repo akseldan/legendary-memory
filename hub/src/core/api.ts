@@ -4,8 +4,9 @@
  */
 import { VERSION } from './constants';
 import type { Db } from './db';
+import { healthSummary } from './activity';
 import * as store from './store';
-import { admitWrite } from './limits';
+import { admitWrite, currentLimits } from './limits';
 
 const MAX_BODY_BYTES = 1_500_000;
 const MAX_MESSAGES = 2000;
@@ -94,6 +95,30 @@ export async function handleApi(request: Request, ctx: ApiContext): Promise<Resp
     return new Response(JSON.stringify({ error: 'Invalid or missing API key.' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json; charset=utf-8', 'WWW-Authenticate': 'Bearer' },
+    });
+  }
+
+  // Monitoring (P9.4.1): versions, sizes, counts and the last day's activity. Never content.
+  if (url.pathname === '/api/status' && request.method === 'GET') {
+    const [counts, health, ledger] = await Promise.all([
+      db
+        .prepare(
+          `SELECT (SELECT COUNT(*) FROM projects) AS projects, (SELECT COUNT(*) FROM checkpoints) AS sessions,
+                  (SELECT COUNT(*) FROM artifacts) AS files, (SELECT COUNT(*) FROM profile) AS facts,
+                  (SELECT COUNT(*) FROM conversations) AS chats, (SELECT COUNT(*) FROM deletions) AS deletions`,
+        )
+        .first<Record<string, number>>(),
+      healthSummary(db),
+      store.ledgerStatus(db),
+    ]);
+    const limits = currentLimits();
+    return json({
+      version: VERSION,
+      moved: Boolean(await store.getMoved(db)),
+      counts,
+      storage: { used_bytes: limits.size ? await limits.size().catch(() => null) : null, quota_bytes: limits.quotaBytes ?? null },
+      last_24h: health,
+      deletion_ledger: ledger,
     });
   }
 
