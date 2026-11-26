@@ -38,6 +38,16 @@ Also changed:
 - `GET /` answers 200 `text/html` (the memory page).
 - A second run of the script stopped safely at step 1 ("Backups never overwrite").
 
+## Follow-ups merged the same evening (#16, #17; no migration)
+- **#16:** adds Archive and Unarchive. Archived projects go to the end of the page and are left out of the recall overview, which says how many are archived. Recalling one by name still works. The backup note is shorter, and the duplicate "Kept in" line is gone.
+- **#17, accessibility:**
+  - Ran axe-core 4 with the WCAG 2.2 AA and best-practice rules on the signed-in page, at 375 and 1280 px, in light and dark mode: 0 violations in all four.
+  - A keyboard pass in Chrome found that focus fell back to the page itself after every change. It now returns to the same control.
+  - A polite live region announces each change (checked: "Saved: favorite editor is now "Neovim"."; "Cooling System archived. It moved to the end of the list.").
+  - A delete question takes focus, and Cancel returns focus to the Delete button.
+  - Project rows read as "Name, status, updated …".
+  - Each session's Delete button names its session.
+
 ## Pending
-- Daniel: sign in at the hub, then correct a fact, download a handoff and check the Activity list. Do one pass with the keyboard only and one with VoiceOver.
-- Not built yet: earlier wordings of a corrected fact (open in DATA-CONTRACT §5), storage by category, first-run polish (P8.3) and the full accessibility audit (P8.4).
+- Daniel checked the live page after #15: the Activity list shows entries and the handoff downloads. Still to do: a VoiceOver pass on a real Mac, after #16 and #17 are deployed.
+- Not built yet: earlier wordings of a corrected fact (open in DATA-CONTRACT §5), storage by category, and first-run polish (P8.3). Fact history was deferred on purpose: no facts are stored yet, and it adds a canonical table that would change exports, copies and the memory hash.
