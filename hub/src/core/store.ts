@@ -841,6 +841,14 @@ export function setLedgerMirror(mirror: LedgerMirror | null, forDb?: Db): void {
   } else anyMirror = mirror;
 }
 
+/** Whether the ledger copy exists and agrees with the database, for monitoring. */
+export async function ledgerStatus(db: Db): Promise<{ copy: boolean; in_database: number; in_copy: number | null }> {
+  const mirror = boundMirrors.get(db) ?? anyMirror;
+  const here = await db.prepare('SELECT COUNT(*) AS n FROM deletions').first<{ n: number }>();
+  const kept = mirror ? await mirror.read().catch(() => null) : null;
+  return { copy: Boolean(mirror), in_database: here?.n ?? 0, in_copy: kept ? kept.length : null };
+}
+
 /**
  * Makes the database and the copy agree: deletions only in the copy are carried out here (the
  * database was restored from before them); deletions only in the database are added to the copy.

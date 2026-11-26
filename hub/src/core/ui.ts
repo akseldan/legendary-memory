@@ -10,7 +10,7 @@
  */
 import type { Db } from './db';
 import * as store from './store';
-import { ACTIVITY_DAYS, ACTIVITY_MAX, logActivity, recentActivity } from './activity';
+import { ACTIVITY_DAYS, ACTIVITY_MAX, healthSummary, logActivity, recentActivity } from './activity';
 import { projectHandoff } from './handoff';
 import { admitWrite, currentLimits } from './limits';
 /** What looking at, connecting or disconnecting one app reports (the local target's setup). */
@@ -99,10 +99,11 @@ async function memorySummary(db: Db, ui: UiOptions) {
   ]);
   const names = new Map(projects.map((p) => [p.id, p.name]));
   const limits = currentLimits();
-  const [used, activity, profile] = await Promise.all([
+  const [used, activity, profile, health] = await Promise.all([
     limits.size ? limits.size().catch(() => null) : Promise.resolve(null),
     recentActivity(db, 40),
     store.getProfile(db),
+    healthSummary(db),
   ]);
   return {
     dataFile,
@@ -114,6 +115,7 @@ async function memorySummary(db: Db, ui: UiOptions) {
     storage: { usedBytes: used, quotaBytes: limits.quotaBytes ?? null, diskFreeBytes: limits.diskFree?.() ?? null },
     activity: { days: ACTIVITY_DAYS, max: ACTIVITY_MAX, entries: activity },
     facts: profile,
+    health,
     ...(undoCommand ? { undoCommand } : {}),
     counts: { projects: projects.length, sessions, files, facts },
     latest: latest

@@ -99,3 +99,33 @@ export async function writeBudget(db: Db, client: string, now = new Date()): Pro
     return null; // A memory from before the activity table: no history to count.
   }
 }
+
+export interface HealthSummary {
+  hours: number;
+  reads: number;
+  writes: number;
+  deletes: number;
+  /** Calls that were refused or failed: permissions, the write budget, a full memory, errors. */
+  refused: number;
+  last_write_at: string | null;
+}
+
+/** Counts only, for the owner and for monitoring scripts (execution plan P9.4.1): no content. */
+export async function healthSummary(db: Db, hours = 24, now = new Date()): Promise<HealthSummary | null> {
+  try {
+    const since = new Date(now.getTime() - hours * 3_600_000).toISOString();
+    const row = await db
+      .prepare(
+        `SELECT SUM(action = 'read' AND ok = 1) AS reads, SUM(action = 'write' AND ok = 1) AS writes,
+                SUM(action = 'delete' AND ok = 1) AS deletes, SUM(ok = 0) AS refused,
+                (SELECT MAX(at) FROM activity WHERE action = 'write' AND ok = 1) AS last_write_at
+           FROM activity WHERE at > ?1`,
+      )
+      .bind(since)
+      .first<Record<string, number | string | null>>();
+    const n = (v: unknown) => Number(v ?? 0);
+    return { hours, reads: n(row?.reads), writes: n(row?.writes), deletes: n(row?.deletes), refused: n(row?.refused), last_write_at: (row?.last_write_at as string | null) ?? null };
+  } catch {
+    return null;
+  }
+}

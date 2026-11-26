@@ -9,6 +9,18 @@ The commands assume:
 
 `HUB` stands for your hub's address. Never paste a key, passphrase or token into a chat with an assistant.
 
+**Health at a glance:** the memory page's **Last 24 hours** row, or this command, which returns counts only and never content:
+```
+curl -s -H "Authorization: Bearer $(cat ~/.legendary-memory/cloudflare-api-key)" HUB/api/status
+```
+It returns:
+- the version and item counts
+- storage used and the allowance
+- reads, saves, deletes and refused calls in the last day, with the time of the last save
+- whether the deletion-record copy exists and matches the database
+
+A refused count that keeps rising, or a save time that stops moving while you're working, is the first sign of trouble.
+
 Written 2026-11-26 (execution plan P9.4.2). Review it whenever a command or page changes.
 
 ---
