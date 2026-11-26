@@ -42,3 +42,20 @@ from Legendary Memory"* and paste it into the other app. Nothing is lost; you ju
    codes are there?" It must name `CT-<code>`.
 4. The hub records which app saved it and when; the row is updated with the date and plan.
 5. Phone rows are run with the Mac shut down or asleep, so the hub must be reachable on its own.
+
+## Languages and content (tested 2026-11-26, `hub/test/content.mjs`)
+
+Saving, recall, the memory page and the Markdown handoff keep all of these unchanged: Russian, Japanese,
+Arabic (right to left), emoji, code and HTML-looking text (shown as text, never run), accented
+Latin, and 120-character project names. Times are stored in UTC and shown in your local time.
+
+What search can and cannot do today:
+
+| Content | Search finds | Search misses |
+|---|---|---|
+| English | the word and its forms (pumps → pump) | — |
+| Accented Latin | with or without accents (creme → crème) | — |
+| Russian, Arabic and other space-separated scripts | the exact word | other forms of it (насосы does not find насос) |
+| Japanese, Chinese (no spaces between words) | a whole run of text up to punctuation | a word inside a longer run (サーミスタ inside サーミスタで制御する) |
+
+Recall by project name works in any script, including one word of a longer name.

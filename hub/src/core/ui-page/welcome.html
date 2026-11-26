@@ -779,7 +779,7 @@
       if (res.status === 401) throw new Error('locked');
       if (!res.ok) throw new Error(`the server answered ${res.status}`);
       const text = await res.text();
-      const link = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/markdown' })), download: `${p.name.replace(/[^A-Za-z0-9 _-]+/g, '').trim().replace(/\s+/g, '-') || 'project'}-handoff.md` });
+      const link = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/markdown' })), download: `${p.name.replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '-') || 'project'}-handoff.md` });
       document.body.append(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(link.href), 10000);
       try { await navigator.clipboard.writeText(text); note.textContent = 'Downloaded, and copied so you can paste it into any assistant.'; } catch { note.textContent = 'Downloaded.'; }
