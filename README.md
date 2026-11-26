@@ -13,13 +13,13 @@ One memory shared across your AI assistants. Start a project in ChatGPT, then te
 It is a small program you own. Run it on your own computer with no account at all, on a
 server of your own, or on Cloudflare's free plan. Your data stays with you in every case.
 
-> **Status (1.1.0, November 2026):** the Cloudflare version is in daily use with Claude on
-> Mac and iPhone and works with ChatGPT. The local install is tested with Claude Desktop
-> and Claude Code on a Mac. The run-it-on-your-own-server version and the other apps
-> (Cursor, Windsurf, Gemini CLI, Codex) pass their automated tests but have not been tried
-> with the real apps, and the Docker image has not been built yet. The one-command installer
-> is tested on Linux, including a real Node.js download, but has not yet been tried on a
-> Mac. The package is not on npm yet. See [docs/PLAN.md](docs/PLAN.md).
+> **Status (1.2.0, November 2026):** the Cloudflare version is in daily use, and it's verified with
+> Claude (web, Desktop, iPhone), ChatGPT (web, iPhone) and Codex. See
+> [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). The one-command installer is tested on macOS
+> and Linux. The memory page shows activity, facts, handoffs and archiving. Deletions survive
+> restores, each app has a save budget, and [runbooks](docs/RUNBOOKS.md) cover what to do when
+> something goes wrong. Still to come: the Docker image, an npm package, a test with outside
+> users, and an independent security review. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Pick where your memory lives
 

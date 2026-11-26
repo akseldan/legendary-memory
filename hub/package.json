@@ -1,6 +1,6 @@
 {
   "name": "legendary-memory",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "One memory shared across your AI assistants (Claude, ChatGPT, Cursor and other MCP apps). Runs on your own computer with no account, on your own server, or on Cloudflare.",
   "license": "MIT",
