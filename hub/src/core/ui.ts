@@ -119,8 +119,9 @@ async function memorySummary(db: Db, ui: UiOptions) {
     latest: latest
       ? { id: latest.id, title: latest.title, project: names.get(latest.project_id) ?? '', source: latest.source, at: latest.created_at }
       : null,
+    // Archived projects go last, so the list leads with what is in use.
     projects: await Promise.all(
-      projects.slice(0, 50).map(async (p) => ({
+      [...projects.filter((p) => p.status !== 'archived'), ...projects.filter((p) => p.status === 'archived')].slice(0, 50).map(async (p) => ({
         id: p.id,
         name: p.name,
         status: p.status,
@@ -168,11 +169,11 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
       headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': `attachment; filename="${file}"`, 'Cache-Control': 'no-store' },
     });
   }
-  if (route === 'POST /ui/brief' || route === 'POST /ui/forget' || route === 'POST /ui/fact') {
+  if (route === 'POST /ui/brief' || route === 'POST /ui/forget' || route === 'POST /ui/fact' || route === 'POST /ui/status') {
     const moved = await store.getMoved(db);
     if (moved) return json({ error: store.movedMessage(moved) }, 409);
   }
-  if (route === 'POST /ui/brief' || route === 'POST /ui/fact') {
+  if (route === 'POST /ui/brief' || route === 'POST /ui/fact' || route === 'POST /ui/status') {
     const admission = await admitWrite(Number(request.headers.get('Content-Length') ?? 0) || 0);
     if (!admission.ok) return json({ error: admission.message }, 507);
   }
@@ -183,6 +184,16 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
     if (!project) return json({ error: 'not found' }, 404);
     await store.updateProject(db, project, { brief: body.brief });
     await logActivity(db, { client: 'memory page', action: 'write', tool: 'edit brief', target: project.name, ok: true });
+    return json({ ok: true });
+  }
+  if (route === 'POST /ui/status') {
+    // Archive hides a project from the list and the overview assistants get; nothing is deleted.
+    const body = (await request.json().catch(() => ({}))) as { id?: unknown; status?: unknown };
+    if (typeof body.id !== 'string' || (body.status !== 'archived' && body.status !== 'active')) return json({ error: 'bad request' }, 400);
+    const project = await store.getProject(db, body.id);
+    if (!project) return json({ error: 'not found' }, 404);
+    await store.updateProject(db, project, { status: body.status });
+    await logActivity(db, { client: 'memory page', action: 'write', tool: body.status === 'archived' ? 'archive' : 'unarchive', target: project.name, ok: true });
     return json({ ok: true });
   }
   if (route === 'POST /ui/fact') {

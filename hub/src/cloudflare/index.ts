@@ -39,7 +39,7 @@ const mcpHandler = {
 const DAY = 24 * 60 * 60;
 
 const BACKUP_NOTE =
-  'Cloudflare keeps a restorable history of this hub (D1 Time Travel: 7 days on the free plan, 30 on a paid one). For a copy you hold yourself, run "legendary-memory backup --from" with this address on your computer; it asks for the importer key.';
+  'Cloudflare can restore this hub to any point in the last 7 days (30 on a paid plan). For a copy of your own, run a backup from your computer: legendary-memory backup --from <this address>.';
 
 const defaultHandler = {
   async fetch(request: Request, env: Env): Promise<Response> {

@@ -182,26 +182,31 @@ export function buildServer(
       return ok(`Nothing is stored yet.\n\n${GETTING_STARTED}`);
     }
     const names = new Map(projects.map((p) => [p.id, p.name]));
+    // Archived projects stay out of the overview; asking for one by name still works.
+    const archived = new Set(projects.filter((p) => p.status === 'archived').map((p) => p.id));
+    const shown = projects.filter((p) => !archived.has(p.id));
     const parts: string[] = [];
     if (profile.length > 0) {
       parts.push('## About the user\n' + profile.map((fact) => `- ${fact.key}: ${clamp(fact.value, 300)}`).join('\n'));
     }
-    if (projects.length > 0) {
+    if (shown.length > 0 || archived.size > 0) {
       parts.push(
         '## Projects\n' +
-          projects
+          shown
             .slice(0, 40)
             .map((p) => {
               const gist = firstLine(p.brief);
               return `- ${p.name} (${p.status}, updated ${day(p.updated_at)})${gist ? `: ${gist}` : ''}`;
             })
-            .join('\n'),
+            .join('\n') +
+          (archived.size ? `\n- (${archived.size} archived ${archived.size === 1 ? 'project' : 'projects'} not listed; recall one by name to see it)` : ''),
       );
     }
-    if (recent.length > 0) {
+    const latest = recent.filter((c) => !archived.has(c.project_id));
+    if (latest.length > 0) {
       parts.push(
         '## Latest sessions\n' +
-          recent.map((c) => `- ${day(c.created_at)} · ${names.get(c.project_id) ?? 'project'} · ${c.title}`).join('\n'),
+          latest.map((c) => `- ${day(c.created_at)} · ${names.get(c.project_id) ?? 'project'} · ${c.title}`).join('\n'),
       );
     }
     return stored(clamp(parts.join('\n\n'), 6000));

@@ -144,6 +144,14 @@ try {
   check('the handoff holds the brief and the sessions', md.startsWith('# Cooling System') && md.includes('Goal: silent and cool.') && md.includes('## Recent sessions'), md.slice(0, 400));
   check('a handoff needs the key', (await ui(`/ui/handoff?id=${encodeURIComponent(projectId)}`, { key: '' })).status === 401);
   check('an unknown project has no handoff', (await ui('/ui/handoff?id=nope')).status === 404);
+  check('archiving needs the key', (await post('/ui/status', { id: projectId, status: 'archived' }, { key: '' })).status === 401);
+  check('an unknown status is refused', (await post('/ui/status', { id: projectId, status: 'gone' })).status === 400);
+  check('a project can be archived', (await post('/ui/status', { id: projectId, status: 'archived' })).status === 200);
+  const overview = await (await mcp('recall', {})).text();
+  check('the overview leaves archived projects out but says they exist', !overview.includes('- Cooling System') && overview.includes('1 archived project'), overview.slice(0, 500));
+  check('an archived project still recalls by name', (await (await mcp('recall', { project: 'Cooling System' })).text()).includes('# Cooling System'));
+  check('archived projects are listed last on the page', (await (await ui('/ui/memory')).json()).projects.at(-1).status === 'archived');
+  check('and it can be brought back', (await post('/ui/status', { id: projectId, status: 'active' })).status === 200 && (await (await mcp('recall', {})).text()).includes('Cooling System'));
   check('a fact can be deleted from the page', (await post('/ui/forget', { kind: 'profile', id: 'favorite-editor' })).status === 200);
   check('and it is gone', !(await (await ui('/ui/memory')).json()).facts.some((f) => f.key === 'favorite-editor'));
   check('deleting an unknown session is not found', (await post('/ui/forget', { kind: 'checkpoint', id: 'nope' })).status === 404);
