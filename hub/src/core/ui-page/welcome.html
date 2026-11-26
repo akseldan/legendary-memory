@@ -164,6 +164,7 @@
   .home h1 { text-align: center; }
   .counts { margin-top: 14px; text-align: center; color: var(--soft); font-size: 1.125rem; }
   .block { margin-top: 38px; }
+  .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .glance { margin: 22px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; padding: 18px 20px; border-radius: 16px; border: 1.5px solid var(--line); background: color-mix(in srgb, var(--card) 88%, transparent); }
   .glance dt { color: var(--soft); }
   .glance dd { margin: 0; overflow-wrap: anywhere; }
@@ -367,8 +368,9 @@
       <h1 tabindex="-1">Your memory is live</h1>
       <p class="counts" id="counts"></p>
       <dl class="glance" id="glance" aria-label="About this memory"></dl>
+      <p class="sr" id="announce" role="status" aria-live="polite"></p>
       <div class="block">
-        <h2>Your projects</h2>
+        <h2 id="h-projects" tabindex="-1">Your projects</h2>
         <div class="search">
           <input id="q" type="search" placeholder="Search your memory" aria-label="Search your memory" autocomplete="off">
           <ul class="stack" id="hits" hidden></ul>
@@ -377,7 +379,7 @@
         <ul class="stack" id="projects"></ul>
       </div>
       <div class="block">
-        <h2>Facts about you</h2>
+        <h2 id="h-facts" tabindex="-1">Facts about you</h2>
         <p class="small" id="facts-lede">What assistants have saved about you. Correct anything that is wrong; the new wording replaces the old.</p>
         <ul class="stack facts" id="facts"></ul>
       </div>
@@ -700,7 +702,17 @@
     } catch (error) { fail(error); }
   }
 
-  const size = (bytes) => bytes == null ? null : bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  // After a change the lists are redrawn, which would drop keyboard focus on the page itself.
+  // So put it back on the same control (or the section heading) and say what happened.
+  const tag = (node, key) => { node.dataset.focus = key; return node; };
+  async function after(message, focusKey, fallback) {
+    await loadMemory();
+    $('announce').textContent = '';
+    setTimeout(() => { $('announce').textContent = message; }, 50);
+    const target = (focusKey && document.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`)) || $(fallback);
+    if (target) target.focus();
+  }
+  const size = (bytes) => bytes == null ? null : bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : bytes < 1073741824 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1073741824).toFixed(1)} GB`;
   const when = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); };
   function renderGlance(memory) {
     const rows = [['Kept in', memory.dataFile]];
@@ -727,7 +739,7 @@
         el('span', { className: 'k', textContent: f.key.replace(/-/g, ' ') }),
         el('span', { className: 'v', textContent: f.value }),
         el('small', { textContent: `saved ${day(f.updated_at)}` }),
-        el('button', { type: 'button', className: 'quiet', textContent: 'Correct', ariaLabel: `Correct ${f.key.replace(/-/g, ' ')}`, onclick: edit }),
+        tag(el('button', { type: 'button', className: 'quiet', textContent: 'Correct', ariaLabel: `Correct ${f.key.replace(/-/g, ' ')}`, onclick: edit }), `fact:${f.key}`),
         el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete', ariaLabel: `Delete ${f.key.replace(/-/g, ' ')}`, onclick: () => askFirst(row, `Delete the fact "${f.key.replace(/-/g, ' ')}"? This cannot be undone.`, { kind: 'profile', id: f.key }) }),
       );
       function edit() {
@@ -737,10 +749,11 @@
         const save = el('button', { type: 'button', className: 'go', textContent: 'Save', onclick: async () => {
           if (!input.value.trim()) { note.textContent = 'Type the corrected fact, or delete it instead.'; return; }
           save.disabled = true;
-          try { await api('/ui/fact', { key: f.key, value: input.value }); await loadMemory(); } catch (error) { note.textContent = `Could not save: ${error.message}`; save.disabled = false; }
+          try { await api('/ui/fact', { key: f.key, value: input.value }); await after(`Saved: ${f.key.replace(/-/g, ' ')} is now "${input.value.trim()}".`, `fact:${f.key}`, 'h-facts'); } catch (error) { note.textContent = `Could not save: ${error.message}`; save.disabled = false; }
         } });
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); if (e.key === 'Escape') show(); });
-        row.replaceChildren(el('span', { className: 'k', textContent: f.key.replace(/-/g, ' ') }), input, save, el('button', { type: 'button', className: 'quiet', textContent: 'Cancel', onclick: show }), note);
+        const cancel = () => { show(); row.querySelector('[data-focus]')?.focus(); };
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); if (e.key === 'Escape') cancel(); });
+        row.replaceChildren(el('span', { className: 'k', textContent: f.key.replace(/-/g, ' ') }), input, save, el('button', { type: 'button', className: 'quiet', textContent: 'Cancel', onclick: cancel }), note);
         input.focus();
       }
       show();
@@ -776,16 +789,17 @@
   // A delete is never one click: the row swaps itself for a plain question first.
   function askFirst(host, message, run) {
     const before = [...host.childNodes];
-    const restore = () => { host.classList.remove('ask'); host.replaceChildren(...before); };
+    const restore = () => { host.classList.remove('ask'); host.replaceChildren(...before); (host.querySelector('button.danger') || host.querySelector('button'))?.focus(); };
     if (host.tagName === 'SPAN') host.classList.add('ask');
     host.replaceChildren(
       el('span', { textContent: message + ' ' }),
       el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete', onclick: async (event) => {
         event.target.disabled = true;
-        try { await api('/ui/forget', run); await loadMemory(); } catch (error) { host.replaceChildren(el('span', { className: 'danger', textContent: `Could not delete: ${error.message}` })); }
+        try { await api('/ui/forget', run); await after('Deleted.', null, run.kind === 'profile' ? 'h-facts' : 'h-projects'); } catch (error) { host.replaceChildren(el('span', { className: 'danger', textContent: `Could not delete: ${error.message}` })); }
       } }),
       el('button', { type: 'button', className: 'quiet', textContent: 'Cancel', onclick: restore }),
     );
+    host.querySelector('button')?.focus();
   }
 
   function projectItem(p, isOpen) {
@@ -796,7 +810,7 @@
       el('button', { type: 'button', className: 'quiet', textContent: 'Edit brief', onclick: edit }),
       el('button', { type: 'button', className: 'quiet', textContent: 'Handoff (Markdown)', onclick: () => downloadHandoff(p, handoffNote) }),
       el('button', { type: 'button', className: 'quiet', textContent: p.status === 'archived' ? 'Unarchive' : 'Archive', onclick: async () => {
-        try { await api('/ui/status', { id: p.id, status: p.status === 'archived' ? 'active' : 'archived' }); await loadMemory(); } catch (error) { handoffNote.textContent = `Could not change it: ${error.message}`; }
+        try { await api('/ui/status', { id: p.id, status: p.status === 'archived' ? 'active' : 'archived' }); await after(p.status === 'archived' ? `${p.name} is active again.` : `${p.name} archived. It moved to the end of the list.`, `project:${p.id}`, 'h-projects'); } catch (error) { handoffNote.textContent = `Could not change it: ${error.message}`; }
       } }),
       el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete project', onclick: () => askFirst(tools, `Delete ${p.name} and all its sessions and files? This cannot be undone.`, { kind: 'project', id: p.id }) }),
       handoffNote,
@@ -807,7 +821,7 @@
       const note = el('span', { className: 'danger' });
       const save = el('button', { type: 'button', className: 'go', textContent: 'Save', onclick: async () => {
         save.disabled = true;
-        try { await api('/ui/brief', { id: p.id, brief: area.value }); await loadMemory(); } catch (error) { note.textContent = `Could not save: ${error.message}`; save.disabled = false; }
+        try { await api('/ui/brief', { id: p.id, brief: area.value }); await after(`Brief for ${p.name} saved.`, `project:${p.id}`, 'h-projects'); } catch (error) { note.textContent = `Could not save: ${error.message}`; save.disabled = false; }
       } });
       brief.replaceWith(area);
       tools.replaceChildren(save, el('button', { type: 'button', className: 'quiet', textContent: 'Cancel', onclick: () => { area.replaceWith(brief); showTools(); } }), note);
@@ -817,12 +831,12 @@
     const sessions = el('ul', {}, p.sessions.map((s) => {
       const row = el('li', {});
       const label = el('span', { textContent: `${s.title} (${nice(s.source)}, ${day(s.created_at)}) ` });
-      const mark = el('span', {}, [el('button', { type: 'button', className: 'quiet', textContent: 'Delete', onclick: () => askFirst(mark, 'Delete this session? This cannot be undone.', { kind: 'checkpoint', id: s.id }) })]);
+      const mark = el('span', {}, [el('button', { type: 'button', className: 'quiet', textContent: 'Delete', ariaLabel: `Delete session ${s.title}`, onclick: () => askFirst(mark, 'Delete this session? This cannot be undone.', { kind: 'checkpoint', id: s.id }) })]);
       row.append(label, mark);
       return row;
     }));
     const details = el('details', { open: isOpen }, [
-      el('summary', {}, [p.name, el('span', { className: 'meta', textContent: `${p.status}, updated ${day(p.updated_at)}` })]),
+      tag(el('summary', {}, [p.name, el('span', { className: 'sr', textContent: ', ' }), el('span', { className: 'meta', textContent: `${p.status}, updated ${day(p.updated_at)}` })]), `project:${p.id}`),
       el('div', { className: 'inside' }, [brief, sessions, tools]),
     ]);
     details.dataset.id = p.id;
