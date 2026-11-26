@@ -807,7 +807,60 @@ export async function forget(db: Db, kind: ForgetKind, id: string): Promise<bool
   const statements = await deletionStatements(db, kind, id, nowIso());
   if (!statements) return false;
   await db.batch(statements);
+  await syncLedger(db).catch((error) => console.error('deletion ledger copy not updated:', error instanceof Error ? error.message : 'unknown error'));
   return true;
+}
+
+// ------------------------------------------------------- deletion ledger copy
+
+/**
+ * A copy of the deletion ledger kept outside the restorable database (execution plan P9.2.2):
+ * a file next to a local memory, Workers KV next to the hub's D1. Restoring an older backup or
+ * rolling D1 back with Time Travel brings back the database as it was, deletions included; the
+ * copy is untouched, so the next sync deletes those records again before they are served.
+ * It holds only what the ledger holds: kind, reference and time, never content.
+ */
+export interface DeletionRow {
+  kind: string;
+  ref: string;
+  deleted_at: string;
+}
+export interface LedgerMirror {
+  /** null when no copy exists yet. */
+  read(): Promise<DeletionRow[] | null>;
+  write(rows: DeletionRow[]): Promise<void>;
+}
+let anyMirror: LedgerMirror | null = null;
+const boundMirrors = new WeakMap<Db, LedgerMirror>();
+
+/** Keep the ledger copy for this database (or, without one, for every database: the hub). */
+export function setLedgerMirror(mirror: LedgerMirror | null, forDb?: Db): void {
+  if (forDb) {
+    if (mirror) boundMirrors.set(forDb, mirror);
+    else boundMirrors.delete(forDb);
+  } else anyMirror = mirror;
+}
+
+/**
+ * Makes the database and the copy agree: deletions only in the copy are carried out here (the
+ * database was restored from before them); deletions only in the database are added to the copy.
+ * Returns how many stored records were removed again.
+ */
+export async function syncLedger(db: Db): Promise<{ restored: number; copied: number }> {
+  const mirror = boundMirrors.get(db) ?? anyMirror;
+  if (!mirror) return { restored: 0, copied: 0 };
+  const keyOf = (r: DeletionRow) => `${r.kind}\u0000${r.ref}`;
+  const { results: here } = await db.prepare('SELECT kind, ref, deleted_at FROM deletions').all<DeletionRow>();
+  const stored = await mirror.read();
+  const kept = stored ?? [];
+  const inDb = new Set(here.map(keyOf));
+  const inCopy = new Set(kept.map(keyOf));
+  const missing = kept.filter((r) => !inDb.has(keyOf(r)) && DELETION_KINDS.includes(r.kind as DeletionKind));
+  let restored = 0;
+  if (missing.length) restored = (await importRows(db, 'deletions', missing as unknown as Row[])).deleted;
+  const extra = here.filter((r) => !inCopy.has(keyOf(r)));
+  if (extra.length || stored === null) await mirror.write([...kept, ...extra]);
+  return { restored, copied: extra.length };
 }
 
 // ---------------------------------------------------------------------- export

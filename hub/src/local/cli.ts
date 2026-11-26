@@ -28,6 +28,7 @@ import { MIN_PASSPHRASE_LENGTH, apiKey, dataDir, dbPath, passphrase, signInDbPat
 import { startServer } from './server';
 import { bearerAuthorizer } from '../core/ui';
 import { defaultRunner, formatResults, installBundle, runSetup, stableNodePath } from './setup';
+import { keepLedger } from './ledger-file';
 import { loadSqlite, openDatabase } from './sqlite';
 import welcomeHtml from '../core/ui-page/welcome.html';
 
@@ -117,11 +118,18 @@ function newestBackupNote(): string {
     : `No backup yet. Make one with: legendary-memory backup`;
 }
 
+/** Opens this computer's memory and applies the deletion records kept beside it. */
+async function openMemory() {
+  const db = openDatabase(dbPath());
+  await keepLedger(db, dbPath());
+  return db;
+}
+
 async function main(): Promise<void> {
   (await import('./limits')).configureLocalLimits();
   switch (command) {
     case 'start': {
-      const db = openDatabase(dbPath());
+      const db = await openMemory();
       const self = process.argv[1] ?? '';
       const token = randomBytes(24).toString('hex');
       const ui = {
@@ -161,7 +169,7 @@ async function main(): Promise<void> {
       return;
     }
     case 'stdio': {
-      const db = openDatabase(dbPath());
+      const db = await openMemory();
       const server = buildServer(db, { client: '' }, [SCOPE_READ, SCOPE_WRITE, SCOPE_DELETE], () => server.server.getClientVersion()?.name ?? '');
       await server.connect(new StdioServerTransport());
       return; // stdout belongs to the protocol; log only to stderr
@@ -189,7 +197,7 @@ async function main(): Promise<void> {
     }
     case 'serve': {
       const port = Number(flag('--port') ?? process.env.PORT ?? 8787);
-      const db = openDatabase(dbPath());
+      const db = await openMemory();
       await startServer(db, apiKey(), port);
       console.error(`Legendary Memory ${VERSION} listening on http://127.0.0.1:${port}  (database: ${dbPath()})`);
       console.error('Run `legendary-memory info` for the key and connector settings.');
@@ -218,7 +226,7 @@ async function main(): Promise<void> {
       const bind = flag('--bind') ?? process.env.LEGENDARY_MEMORY_BIND ?? '127.0.0.1';
       // Loaded here so the everyday commands do not pay for the sign-in code.
       const [{ startHost }, { SqliteKv }] = await Promise.all([import('./host'), import('./kv')]);
-      await startHost(openDatabase(dbPath()), new SqliteKv(signInDbPath()), {
+      await startHost(await openMemory(), new SqliteKv(signInDbPath()), {
         port,
         bind,
         publicUrl: origin.origin,

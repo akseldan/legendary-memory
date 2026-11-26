@@ -83,9 +83,14 @@ Target (P3/P9):
 - `copy` and restore skip rows whose identity is in the destination's `deletions`, and report how many they skipped.
 - `copy` carries the ledger: deletions on the source are applied on the destination and reported ("N removed here").
 - A deliberate `remember` of a deleted key clears that key's entry (a new fact). New saves get new ids, so they are never blocked.
-- Known limit: restoring an old backup into an **empty** home cannot know about later deletions; copy from the current home afterwards (or restore into it) and they are removed. P3.5's quarantined restore will make this automatic.
+- **Copy outside the database (P9.2, 2026-11-26).**
+  - A local memory keeps `deletions-ledger.json` beside `memory.db`. Backups and restores replace the database but never this file. It is applied each time the memory is opened by `start`, `serve`, `stdio` or `host`, before anything is served.
+  - The Cloudflare hub keeps the same records in Workers KV (`lm:deletion-ledger`), which D1 Time Travel does not roll back. The Worker checks it at most once a minute per instance, before answering.
+  - In both places a missing copy is rebuilt from the database. Records only in the copy are deleted again, and the startup log says how many.
+  - Tested by `hub/test/ledger.mjs`, plus a `wrangler dev` check that a project restored over its deletion was removed before the first response.
+- Remaining limit: restoring a backup into a **new folder or a new hub** starts without that copy. Copy the `deletions-ledger.json` file along, or copy from the current home afterwards.
 
-Acceptance: delete a checkpoint, restore a backup taken before the delete, the checkpoint stays deleted.
+Acceptance: delete a checkpoint, restore a backup taken before the delete, the checkpoint stays deleted. **Met 2026-11-26** for restores in place, local and hub.
 
 ## 7. Versions
 
