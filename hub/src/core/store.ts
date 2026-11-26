@@ -264,7 +264,10 @@ export interface Resolution {
 function scoreProject(project: Project, ref: string): number {
   const wanted = ref.trim().toLowerCase();
   if (!wanted) return 0;
-  if (project.slug === slugify(ref) || project.name.toLowerCase() === wanted) return 100;
+  if (project.name.toLowerCase() === wanted) return 100;
+  // The fallback slug ("project") only says the name had no letters; it identifies nothing.
+  const refSlug = slugify(ref);
+  if (project.slug === refSlug && (refSlug !== 'project' || wanted === 'project')) return 100;
   const refWords = keyWords(ref);
   if (refWords.length === 0) return 0;
   let best = 0;

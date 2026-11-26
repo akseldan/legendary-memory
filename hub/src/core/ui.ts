@@ -164,9 +164,11 @@ export async function handleUi(request: Request, db: Db, ui: UiOptions): Promise
     const handoff = await projectHandoff(db, url.searchParams.get('id') ?? '');
     if (!handoff) return json({ error: 'not found' }, 404);
     await logActivity(db, { client: 'memory page', action: 'read', tool: 'handoff', target: handoff.name, ok: true });
-    const file = `${handoff.name.replace(/[^A-Za-z0-9 _-]+/g, '').trim().replace(/\s+/g, '-') || 'project'}-handoff.md`;
+    // An ASCII name for old browsers, and the real one (any script) for the rest (RFC 6266).
+    const ascii = `${handoff.name.replace(/[^A-Za-z0-9 _-]+/g, '').trim().replace(/\s+/g, '-') || 'project'}-handoff.md`;
+    const full = `${handoff.name.replace(/[\\/:*?"<>|\p{Cc}]+/gu, '').trim().replace(/\s+/g, '-') || 'project'}-handoff.md`;
     return new Response(handoff.markdown, {
-      headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': `attachment; filename="${file}"`, 'Cache-Control': 'no-store' },
+      headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(full)}`, 'Cache-Control': 'no-store' },
     });
   }
   if (route === 'POST /ui/brief' || route === 'POST /ui/forget' || route === 'POST /ui/fact' || route === 'POST /ui/status') {

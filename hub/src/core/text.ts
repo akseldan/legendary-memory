@@ -7,7 +7,9 @@ export function slugify(name: string): string {
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    // Letters and digits of every script count, so "Охлаждение" and "冷却" get their own slugs
+    // instead of all collapsing to the fallback (which made different projects look the same).
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
     .replace(/-+$/g, '');
@@ -41,7 +43,7 @@ const FILLER = new Set(['the', 'a', 'an', 'my', 'our', 'project', 'projects', 'a
 export function keyWords(text: string): string[] {
   return text
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 0 && !FILLER.has(word));
 }
 
