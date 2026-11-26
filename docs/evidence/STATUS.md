@@ -35,7 +35,8 @@ deletion records. Contentless FTS5 confirmed working on production D1.
 | P5 Local install lifecycle (macOS arm64, Linux x64/arm64) and self-host backup/restore | **Done** (draft PR #13); Windows not supported by install.sh | `P5-installer-linux-2026-11-25.md` |
 | P6 compatibility matrix | Done 2026-11-25: six surfaces verified (6/6 test codes on the hub, saved by claude/chatgpt/codex) | [COMPATIBILITY.md](../COMPATIBILITY.md) |
 | P8 ownership | First slice deployed 2026-11-25 (activity history, facts, handoff, page on the hub); manual keyboard/VoiceOver pass and the rest of P8 pending | [P8-ownership-2026-11-25.md](P8-ownership-2026-11-25.md) |
-| P7, P9–P13 | Not started | — |
+| P9 security and recovery | In progress: deletion ledger outside the database, write budget, adversarial tests, runbooks done; failure drills and monitoring next | [P9-security-recovery-2026-11-26.md](P9-security-recovery-2026-11-26.md) |
+| P7, P10–P13 | Not started | — |
 
 ## PR stack (merged into main 2026-11-25 by fast-forward; #3–#13 closed with a note)
 
