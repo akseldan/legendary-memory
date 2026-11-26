@@ -1,4 +1,4 @@
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 export const SCOPE_READ = 'memory:read';
 export const SCOPE_WRITE = 'memory:write';
 /** Deleting (forget). Separate from writing since 2026-11-24; see `ConnectionProps.v`. */
