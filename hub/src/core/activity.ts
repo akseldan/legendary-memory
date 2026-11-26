@@ -68,3 +68,34 @@ export async function recentActivity(db: Db, limit = 50): Promise<ActivityRow[]>
     return [];
   }
 }
+
+/**
+ * Saves and deletes one app may make: a steady assistant never comes close, while a runaway or
+ * hijacked one cannot bury the memory in junk or delete it all in one go (execution plan P9.1.3).
+ * Reads are never limited. The memory page and the importer are not apps and are not counted.
+ */
+export const WRITES_PER_MINUTE = 30;
+export const WRITES_PER_HOUR = 300;
+
+/** null when the app may write now, otherwise the plain reason it may not. */
+export async function writeBudget(db: Db, client: string, now = new Date()): Promise<string | null> {
+  try {
+    const minute = new Date(now.getTime() - 60_000).toISOString();
+    const hour = new Date(now.getTime() - 3_600_000).toISOString();
+    const row = await db
+      .prepare(
+        "SELECT SUM(at > ?2) AS minute, COUNT(*) AS hour FROM activity WHERE client = ?1 AND action IN ('write', 'delete') AND ok = 1 AND at > ?3",
+      )
+      .bind(client, minute, hour)
+      .first<{ minute: number | null; hour: number }>();
+    if ((row?.minute ?? 0) >= WRITES_PER_MINUTE) {
+      return `This app has saved or deleted ${WRITES_PER_MINUTE} times in the last minute, the most allowed, so nothing was changed. Wait a minute and try again. If you did not expect this many changes, the owner can review them under Activity on the memory page.`;
+    }
+    if ((row?.hour ?? 0) >= WRITES_PER_HOUR) {
+      return `This app has saved or deleted ${WRITES_PER_HOUR} times in the last hour, the most allowed, so nothing was changed. Try again later. The owner can review these changes under Activity on the memory page.`;
+    }
+    return null;
+  } catch {
+    return null; // A memory from before the activity table: no history to count.
+  }
+}

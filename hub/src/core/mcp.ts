@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { type ConnectionProps, SCOPE_WRITE, VERSION, canDelete } from './constants';
 import type { Db } from './db';
 import * as store from './store';
-import { logActivity } from './activity';
+import { logActivity, writeBudget } from './activity';
 import { admitWrite } from './limits';
 import { clamp, day, slugify } from './text';
 
@@ -121,6 +121,8 @@ export function buildServer(
       if (write) {
         const moved = await store.getMoved(db);
         if (moved) return fail(store.movedMessage(moved));
+        const tooMany = await writeBudget(db, source());
+        if (tooMany) return fail(tooMany);
       }
       // Space is checked for saves only: deleting is how you make room.
       let note: string | undefined;
