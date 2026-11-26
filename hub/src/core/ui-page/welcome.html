@@ -456,6 +456,7 @@
       if (path === '/ui/apps') return { apps: fake.apps };
       if (path === '/ui/connect') { for (const a of fake.apps) if (body.only.includes(a.app)) a.status = 'connected'; return { apps: fake.apps }; }
       if (path === '/ui/brief') { const p = fake.memory.projects.find((x) => x.id === body.id); if (p) p.brief = body.brief; return { ok: true }; }
+      if (path === '/ui/status') { const pr = fake.memory.projects.find((x) => x.id === body.id); if (pr) pr.status = body.status; return { ok: true }; }
       if (path === '/ui/fact') { const f = (fake.memory.facts || []).find((x) => x.key === body.key); if (f) { f.value = body.value; f.updated_at = new Date().toISOString(); } return { ok: true }; }
       if (path === '/ui/forget' && body.kind === 'profile') { fake.memory.facts = (fake.memory.facts || []).filter((x) => x.key !== body.id); return { ok: true }; }
       if (path === '/ui/forget') {
@@ -688,7 +689,7 @@
       const memory = await api('/ui/memory');
       const c = memory.counts;
       $('counts').textContent = [count(c.projects, 'project', 'projects'), count(c.sessions, 'session', 'sessions'), count(c.files, 'saved file', 'saved files'), count(c.facts, 'fact about you', 'facts about you')].join(', ');
-      $('where').textContent = `Kept in ${memory.dataFile}`;
+      $('where').textContent = '';
       if (memory.undoCommand) $('say-undo').textContent = memory.undoCommand;
       renderGlance(memory);
       renderFacts(memory.facts || []);
@@ -794,6 +795,9 @@
     const showTools = () => tools.replaceChildren(
       el('button', { type: 'button', className: 'quiet', textContent: 'Edit brief', onclick: edit }),
       el('button', { type: 'button', className: 'quiet', textContent: 'Handoff (Markdown)', onclick: () => downloadHandoff(p, handoffNote) }),
+      el('button', { type: 'button', className: 'quiet', textContent: p.status === 'archived' ? 'Unarchive' : 'Archive', onclick: async () => {
+        try { await api('/ui/status', { id: p.id, status: p.status === 'archived' ? 'active' : 'archived' }); await loadMemory(); } catch (error) { handoffNote.textContent = `Could not change it: ${error.message}`; }
+      } }),
       el('button', { type: 'button', className: 'quiet danger', textContent: 'Delete project', onclick: () => askFirst(tools, `Delete ${p.name} and all its sessions and files? This cannot be undone.`, { kind: 'project', id: p.id }) }),
       handoffNote,
     );
