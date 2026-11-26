@@ -48,6 +48,14 @@ Also changed:
   - Project rows read as "Name, status, updated …".
   - Each session's Delete button names its session.
 
+## Live check and content tests (2026-11-26)
+- After #16 and #17 were deployed, Daniel checked with VoiceOver: archiving and unarchiving announced "…archived" and "…active again".
+- **#18** added `test/content.mjs` (30 checks) and fixed the bug it found.
+  - **The bug:** every name without Latin letters got the same fallback slug, `project`. So a second Russian, Japanese or Arabic project collided with the first one, and non-Latin fact keys collapsed into one.
+  - **The fix:** slugs and name matching now use letters and digits from every script.
+  - The search limits the test found are documented in COMPATIBILITY.md. Outside English there is no stemming, and Japanese and Chinese runs are not split into words.
+  - Daniel's hub only has Latin names, so nothing there is affected.
+
 ## Pending
-- Daniel checked the live page after #15: the Activity list shows entries and the handoff downloads. Still to do: a VoiceOver pass on a real Mac, after #16 and #17 are deployed.
+- Daniel checked the live page after #15: the Activity list shows entries and the handoff downloads. VoiceOver pass done 2026-11-26.
 - Not built yet: earlier wordings of a corrected fact (open in DATA-CONTRACT §5), storage by category, and first-run polish (P8.3). Fact history was deferred on purpose: no facts are stored yet, and it adds a canonical table that would change exports, copies and the memory hash.
