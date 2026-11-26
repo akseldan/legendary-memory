@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const BIN = fileURLToPath(new URL('../dist/legendary-memory.mjs', import.meta.url));
 const home = mkdtempSync(join(tmpdir(), 'lm-content-'));
 const KEY = 'k'.repeat(40);
-const PORT = 18861;
+const PORT = 18871;
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let passed = 0;

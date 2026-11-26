@@ -16,6 +16,7 @@ import { handleMcpRequest } from '../core/mcp';
 import { currentLimits, setLimits } from '../core/limits';
 import welcomeHtml from '../core/ui-page/welcome.html';
 import { hostUi } from '../core/ui-session';
+import { type DeletionRow, setLedgerMirror, syncLedger } from '../core/store';
 import { handleAuthorize } from './auth';
 import { grantIdOf, handleConnections, recordUse } from './connections';
 import { type ConnectionProps, type Env, SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, VERSION } from './env';
@@ -142,9 +143,34 @@ function configureLimits(env: Env): void {
   });
 }
 
+/**
+ * The deletion ledger copy lives in KV, which D1 Time Travel does not roll back. It is checked
+ * at most once a minute per instance, before the request is answered, so a hub restored to before
+ * a deletion deletes those records again before serving them.
+ */
+const LEDGER_KEY = 'lm:deletion-ledger';
+const LEDGER_CHECK_MS = 60_000;
+let ledgerCheckedAt = 0;
+async function checkLedger(env: Env): Promise<void> {
+  if (Date.now() - ledgerCheckedAt < LEDGER_CHECK_MS) return;
+  ledgerCheckedAt = Date.now();
+  setLedgerMirror({
+    read: async () => ((await env.OAUTH_KV.get(LEDGER_KEY, 'json')) as { deletions: DeletionRow[] } | null)?.deletions ?? null,
+    write: async (rows) => env.OAUTH_KV.put(LEDGER_KEY, JSON.stringify({ deletions: rows })),
+  });
+  try {
+    const { restored } = await syncLedger(dbOf(env));
+    if (restored) console.log(`deletion ledger: removed ${restored} restored record(s) again`);
+  } catch (error) {
+    ledgerCheckedAt = 0;
+    console.error('deletion ledger check failed:', error instanceof Error ? error.message : 'unknown error');
+  }
+}
+
 export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     configureLimits(env);
+    await checkLedger(env);
     const origin = publicOrigin(request, env);
     let provider = providers.get(origin);
     if (!provider) {
