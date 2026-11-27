@@ -367,7 +367,7 @@
     <section class="step home" data-step="done" hidden>
       <h1 tabindex="-1">Your memory is live</h1>
       <p class="counts" id="counts"></p>
-      <dl class="glance" id="glance" aria-label="About this memory"></dl>
+      <dl class="glance" id="glance" aria-label="About this memory" tabindex="-1"></dl>
       <p class="sr" id="announce" role="status" aria-live="polite"></p>
       <div class="block">
         <h2 id="h-projects" tabindex="-1">Your projects</h2>
@@ -456,6 +456,7 @@
     if (demo) {
       await wait(body ? 700 : 150);
       if (path === '/ui/apps') return { apps: fake.apps };
+      if (path === '/ui/disconnect') { for (const a of fake.apps) if (body.only.includes(a.app)) a.status = 'found'; return { apps: fake.apps }; }
       if (path === '/ui/connect') { for (const a of fake.apps) if (body.only.includes(a.app)) a.status = 'connected'; return { apps: fake.apps }; }
       if (path === '/ui/brief') { const p = fake.memory.projects.find((x) => x.id === body.id); if (p) p.brief = body.brief; return { ok: true }; }
       if (path === '/ui/status') { const pr = fake.memory.projects.find((x) => x.id === body.id); if (pr) pr.status = body.status; return { ok: true }; }
@@ -728,7 +729,20 @@
     const h = memory.health;
     if (h) rows.push(['Last 24 hours', `${h.reads} reads, ${h.writes} saves, ${h.deletes} deletes${h.refused ? `, ${h.refused} refused or failed (see Activity)` : ', nothing refused'}`]);
     if (memory.connectionsUrl) rows.push(['Connected apps', el('a', { href: memory.connectionsUrl, textContent: 'See and disconnect apps' })]);
-    else if (apps.length) rows.push(['Connected apps', apps.filter((a) => a.status === 'connected').map((a) => a.app).join(', ') || 'None yet']);
+    else if (apps.length) {
+      // On this computer: each connected app with its own Disconnect (it stops using this memory;
+      // nothing in the memory changes). Connecting again is on the setup step above.
+      const linked = apps.filter((a) => a.status === 'connected');
+      rows.push(['Connected apps', linked.length ? el('span', {}, linked.flatMap((a, i) => [
+        i ? ' · ' : '',
+        a.app, ' ',
+        tag(el('button', { type: 'button', className: 'quiet', textContent: 'Disconnect', ariaLabel: `Disconnect ${a.app}`, onclick: async (e) => {
+          e.target.disabled = true;
+          try { apps = (await api('/ui/disconnect', { only: [a.app] })).apps; await after(`${a.app} disconnected. Restart it to finish.`, null, 'glance'); }
+          catch (error) { e.target.disabled = false; $('announce').textContent = `Could not disconnect ${a.app}: ${error.message}`; }
+        } }), `app:${a.app}`),
+      ])) : 'None yet']);
+    }
     $('glance').replaceChildren(...rows.flatMap(([k, v]) => [el('dt', { textContent: k }), el('dd', {}, [v])]));
   }
 
