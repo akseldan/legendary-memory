@@ -50,3 +50,9 @@ DB --remote`; `wrangler deploy` of the same build; recall/search from Claude and
 backup and compare. Update `~/.legendary-memory/bin` to the same build at the same time (older CLIs
 refuse newer schemas). Contentless FTS5 was verified on wrangler's local D1 engine, not yet on
 production D1.
+
+## v1.2.0 released 2026-11-26
+- The release has 3 assets. `sha256sum -c SHA256SUMS` passes for legendary-memory.mjs (2,079,863 B) and legendary-memory.mcpb.
+- Ran the public one-liner on a clean Linux home: about 6 s, and `--version` prints 1.2.0.
+- The hub's `/api/health` returns `{"ok":true,"version":"1.2.0"}`. A backup of the hub was taken before the redeploy (`pre-deploy-1.2.0-144600.db`).
+- The program on Daniel's Mac was updated to 1.2.0, with 1.1.0 kept as `.bak-1.1.0`.
